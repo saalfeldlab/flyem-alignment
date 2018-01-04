@@ -1,5 +1,6 @@
 package org.janelia.render;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -12,6 +13,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.DoubleUnaryOperator;
 
+import org.janelia.render.SynPrediction.SynCollection;
 import org.janelia.render.TbarPrediction.TbarCollection;
 import org.janelia.saalfeldlab.hotknife.ViewAlignedSlabSeries.Options;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
@@ -229,10 +231,24 @@ public class KDTreeRenderer<P extends RealLocalizable>
 		for (int i = 0; i < datasetNames.size(); ++i) {
 //		for (int i = 0; i < 1; ++i) {
 
+			File synapseFile = new File( options.getSynapsePaths().get( i ));
+
 			// load synapses
-			TbarCollection tbars = TbarPrediction.loadAll( options.getSynapsePaths().get( i ) );
-			System.out.println( tbars );
-			KDTreeRenderer<RealPoint> treeRenderer = new KDTreeRenderer<RealPoint>( tbars.getValues( 0 ), tbars.getPoints() );
+			KDTreeRenderer<RealPoint> treeRenderer = null;
+			if(  synapseFile.getName().startsWith( "cx" ))
+			{
+				System.out.println("loading synapses new");
+				SynCollection synapses = SynPrediction.loadAll( synapseFile.getAbsolutePath() );
+				System.out.println( synapses );
+				treeRenderer = new KDTreeRenderer<RealPoint>( synapses.getValues( 0 ), synapses.getPoints() );
+			}
+			else
+			{
+				System.out.println("loading synapses old");
+				TbarCollection tbars = TbarPrediction.loadAll( options.getSynapsePaths().get( i ) );
+				System.out.println( tbars );
+				treeRenderer = new KDTreeRenderer<RealPoint>( tbars.getValues( 0 ), tbars.getPoints() );
+			}
 
 			RealRandomAccessible< DoubleType > source= treeRenderer.getRealRandomAccessible( 
 					options.getRadius(),
