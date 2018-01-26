@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -19,6 +21,7 @@ import org.json.JSONObject;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
 import net.imglib2.realtransform.RealTransform;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.AbstractRealType;
 import net.imglib2.type.numeric.real.DoubleType;
 
@@ -31,7 +34,33 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 	public String kind;
 	public SynProperties props;
 	public int[] location;
+	public double[] locationDouble;
 
+	public SynPrediction(){}
+
+	public SynPrediction( final String kind, final int[] location, final double conf )
+	{
+		this.kind = kind;
+		this.location = location;
+		props = new SynProperties( conf );
+	}
+	
+	public SynPrediction( final String kind, final double[] location, final double conf )
+	{
+		this.kind = kind;
+		this.locationDouble = location;
+		props = new SynProperties( conf );
+	}
+	
+	public SynPrediction( final String kind, final RealPoint location, final double conf )
+	{
+		this.kind = kind;
+		props = new SynProperties( conf );
+
+		locationDouble = new double[ location.numDimensions() ];
+		location.localize( locationDouble );		
+	}
+	
 	public static void main( String[] args ) throws IOException
 	{
 
@@ -45,22 +74,31 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 //		String outpath = "/data-ssd/john/flyem/small_synapses.ser";
 
 //		String path = "/groups/saalfeld/home/bogovicj/tmp/cx_24_tmp.json";
-		String path = "/data-ssd/john/flyem/sec24/cx24_tbars_th0.8.json";
+//		String path = "/data-ssd/john/flyem/sec24/cx24_tbars_th0.8.json";
+		String path = "/data-ssd/john/flyem/sec24/cx24_nl_sub.json";
 
-		String outpath = "/data-ssd/john/flyem/synapses.ser";
+//		String outpath = "/data-ssd/john/flyem/synapses.ser";
+		String outpath = "/data-ssd/john/flyem/sec24/cx24_nl_sub2.json";
 
 		System.out.println( "reading" );
-		SynCollection syns = SynPrediction.loadAll( path );
+		SynCollection<DoubleType> syns = SynPrediction.loadAll( path, new DoubleType() );
 		System.out.println( syns.toString() );
-		
+
 //		System.out.println( "writing" );
 //		PreSynPrediction.write( tbars, outpath );
 //		TbarCollection tbars2 = PreSynPrediction.loadSerialized( outpath );
 		
+		System.out.println( " "  );
+		System.out.println( syns.getList() );
+
+		System.out.println( " " );
+		System.out.println( " " );
+		SynPrediction.write( syns, outpath );
+		
 		System.out.println( "done" );
 	}
 
-	public static void write( SynCollection tbars, String outpath )
+	public static void writeSer( SynCollection tbars, String outpath )
 	{
 		try {
 	         FileOutputStream fileOut = new FileOutputStream( outpath );
@@ -75,6 +113,14 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 		{
 			i.printStackTrace();
 		}
+	}
+	
+	public static void write( SynCollection tbars, String outpath ) throws IOException
+	{
+		JSONArray out = tbars.toJson();
+//		System.out.println( out );
+	
+		Files.write( Paths.get( outpath ), out.toString().getBytes());
 	}
 	
 	public static SynPrediction load( JSONObject obj )
@@ -94,18 +140,18 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 		return out;
 	}
 
-	public static SynCollection loadSerialized( String path )
+	public static <T extends RealType<T>> SynCollection<T> loadSerialized( String path, T t )
 	{
 		if( !path.endsWith( ".ser" ))
 		{
 			System.err.println("loadSerialized: path must end in .ser");
 			return null;
 		}
-		SynCollection tbars = null;
+		SynCollection<T> tbars = null;
 		try {
 	         FileInputStream fileIn = new FileInputStream( path );
 	         ObjectInputStream in = new ObjectInputStream(fileIn);
-	         tbars = (SynCollection) in.readObject();
+	         tbars = (SynCollection<T>) in.readObject();
 	         in.close();
 	         fileIn.close();
 	      }catch(IOException i) {
@@ -119,7 +165,7 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 		return tbars;
 	}
 	
-	public static SynCollection loadAll( String path )
+	public static <T extends RealType<T>> SynCollection<T> loadAll( String path, T t )
 	{
 //		String jsonData = "";
 		BufferedReader br = null;
@@ -151,11 +197,11 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 			}
 		}
 		JSONArray obj = new JSONArray( jsonData.toString() );
-		SynCollection syns = SynPrediction.loadAll( obj );
+		SynCollection<T> syns = SynPrediction.loadAll( obj, t );
 		return syns;
 	}
 
-	public static SynCollection loadAll( JSONArray tbarArray )
+	public static <T extends RealType<T>> SynCollection<T> loadAll( JSONArray tbarArray, T t  )
 	{
 		ArrayList<SynPrediction> tbars = new ArrayList<SynPrediction>();
 		long[] min = new long[ 3 ];
@@ -178,7 +224,7 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 //				System.out.println( "i: " + i + " out of ~100k" );
 //			}
 		}
-		return new SynCollection( tbars, min, max );
+		return new SynCollection<T>( tbars, min, max, t );
 	}
 
 	public static void updateMinMax( final long[] min, final long[] max, final SynPrediction tbp )
@@ -197,11 +243,11 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 	{
 		private static final long serialVersionUID = 51530766918420051L;
 
-		public final double confidence;
+		public final double conf;
 
 		public SynProperties( final double confidence )
 		{
-			this.confidence = confidence;
+			this.conf = confidence;
 		}
 		public static SynProperties load( JSONObject obj )
 		{
@@ -210,21 +256,66 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 		}
 	}
 
-	public static class SynCollection implements Serializable
+	public static class SynCollection<T extends RealType<T>> implements Serializable
 	{
 		private static final long serialVersionUID = -1063017232502453517L;
 
 		public final ArrayList<SynPrediction> list;
-		public final long[] min;
-		public final long[] max;
+		public transient final long[] min;
+		public transient final long[] max;
+		private transient final T t;
 
 		public SynCollection( 
 				final ArrayList<SynPrediction> list,
 				final long[] min,
-				final long[] max ){
+				final long[] max,
+				final T t ){
 			this.list = list;
 			this.min = min;
 			this.max = max;
+			this.t = t;
+		}
+		
+		public SynCollection(
+				final List<RealPoint> pt,
+				final List<DoubleType> vals,
+				T t )
+		{
+			assert pt.size() == vals.size();
+
+			ArrayList<SynPrediction> splist = new ArrayList<SynPrediction>();
+			long[] min = new long[ 3 ];
+			long[] max = new long[ 3 ];
+			
+			Arrays.fill( min, Long.MAX_VALUE );
+			Arrays.fill( max, Long.MIN_VALUE );
+			
+			for( int i = 0; i < pt.size(); i++ )
+			{
+				double conf = vals.get( i ).getRealDouble();
+				
+				double[] pos = new double[ 3 ];
+				pt.get( i ).localize( pos );
+				for( int j = 0; j < 3; j++ )
+				{
+					long vf = (long) Math.floor( pos[ j ] );
+					long vc = (long) Math.ceil( pos[ j ] );
+
+					if( vf < min[ j ] )
+						min[ j ] = vf;
+
+					if( vc > max[ j ] )
+						max[ j ] = vc;
+				}
+
+				SynPrediction sp = new SynPrediction( "PreSyn", pos, conf );
+				splist.add( sp );
+			}
+
+			this.list = splist;
+			this.min = min;
+			this.max = max;
+			this.t = t;
 		}
 
 		@Override
@@ -237,20 +328,67 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 			return out;
 		}
 		
-		public List<DoubleType> getValues( final double thresh )
+		public List<T> getValues( final double thresh )
 		{
 			return list.stream()
-					.map( x -> x.props.confidence > thresh ? new DoubleType(1) : new DoubleType( 0 ) )
+					.map( x -> x.props.conf > thresh ? one() : zero() )
 					.collect( Collectors.toList() );
+		}
+		
+		public List<T> getValues()
+		{
+			return list.stream()
+					.map( x -> set( x.props.conf ))
+					.collect( Collectors.toList() );
+		}
+
+		private T set( double v )
+		{
+			T out = t.createVariable();
+			out.setReal( v );
+			return out;
+		}
+
+		private T zero()
+		{
+			T out = t.createVariable();
+			out.setZero();
+			return out;
+		}
+
+		private T one()
+		{
+			T out = t.createVariable();
+			out.setOne();
+			return out;
 		}
 		
 		public List<RealPoint> getPoints()
 		{
 			return list.stream()
 					.map( x -> new RealPoint( (double)x.location[0], (double)x.location[1], (double)x.location[2] ))
-					.collect( Collectors.toList() );
+					.collect( Collectors.toList() ); 
 		}
 		
+		public List<RealPoint> getPointsDouble()
+		{
+			return list.stream()
+					.map( x -> new RealPoint( (double)x.locationDouble[0], (double)x.locationDouble[1], (double)x.locationDouble[2] ))
+					.collect( Collectors.toList() ); 
+		}
+
+		public ArrayList<SynPrediction> getList()
+		{
+			return list;
+		}
+
+		public JSONArray toJson()
+		{
+			JSONArray out = new JSONArray();
+			List< JSONObject > y = list.stream().map( SynPrediction::toJson ).collect( Collectors.toList() );
+			out.put( y );
+			return out;
+		}
 	}
 
 	public static List<RealPoint> transformPoints( final List<RealPoint> pts, final RealTransform xfm )
@@ -329,25 +467,25 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 	@Override
 	public double getRealDouble()
 	{
-		return props.confidence > 0.85 ? 50 : 0;
+		return props.conf > 0.85 ? 50 : 0;
 	}
 
 	@Override
 	public float getRealFloat()
 	{
-		return props.confidence > 0.85 ? 50f : 0f;
+		return props.conf > 0.85 ? 50f : 0f;
 	}
 
 	@Override
 	public void setReal( float f )
 	{
-		// TODO Auto-generated method stub
+		// not set-able, do nothing
 	}
 
 	@Override
 	public void setReal( double f )
 	{
-		// TODO Auto-generated method stub
+		// not set-able, do nothing
 	}
 
 	@Override
@@ -365,6 +503,24 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 	@Override
 	public boolean valueEquals( SynPrediction t )
 	{
-		return props.confidence == t.props.confidence;
+		return props.conf == t.props.conf;
+	}
+	
+	public JSONObject toJson()
+	{
+		JSONObject p = new JSONObject();
+		p.put( "conf", this.props.conf );
+
+		JSONObject obj = new JSONObject();
+		obj.put( "Kind", this.kind );
+		
+		if( this.location != null )
+			obj.put( "Pos", this.location );
+		else if ( this.locationDouble != null )
+			obj.put( "Pos", this.locationDouble );
+
+		obj.put( "Prop", p );
+
+		return obj;
 	}
 }

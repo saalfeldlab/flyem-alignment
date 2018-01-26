@@ -19,6 +19,7 @@ import org.json.JSONObject;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
 import net.imglib2.realtransform.RealTransform;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.AbstractRealType;
 import net.imglib2.type.numeric.real.DoubleType;
 
@@ -50,17 +51,17 @@ public class TbarPrediction extends AbstractRealType<TbarPrediction> implements 
 		String outpath = "/data-ssd/john/flyem/synapses.ser";
 
 		System.out.println( "reading" );
-		TbarCollection tbars = TbarPrediction.loadAll( path );
+		TbarCollection<DoubleType> tbars = TbarPrediction.loadAll( path, new DoubleType() );
 		System.out.println( tbars.toString() );
 		
-		System.out.println( "writing" );
-		TbarPrediction.write( tbars, outpath );
-		TbarCollection tbars2 = TbarPrediction.loadSerialized( outpath );
+//		System.out.println( "writing" );
+//		TbarPrediction.write( tbars, outpath );
+//		TbarCollection<DoubleType> tbars2 = TbarPrediction.loadSerialized( outpath );
 		
 		System.out.println( "done" );
 	}
 
-	public static void write( TbarCollection tbars, String outpath )
+	public static void write( TbarCollection<?> tbars, String outpath )
 	{
 		try {
 	         FileOutputStream fileOut = new FileOutputStream( outpath );
@@ -129,7 +130,7 @@ public class TbarPrediction extends AbstractRealType<TbarPrediction> implements 
 		return tbars;
 	}
 	
-	public static TbarCollection loadAll( String path )
+	public static <T extends RealType<T>> TbarCollection<T> loadAll( String path, T type )
 	{
 //		String jsonData = "";
 		BufferedReader br = null;
@@ -162,11 +163,11 @@ public class TbarPrediction extends AbstractRealType<TbarPrediction> implements 
 		}
 		JSONObject obj = new JSONObject(jsonData.toString());
 		JSONArray data = obj.getJSONArray("data");
-		TbarCollection tbars = TbarPrediction.loadAll( data );
+		TbarCollection<T> tbars = TbarPrediction.loadAll( data, type );
 		return tbars;
 	}
 
-	public static TbarCollection loadAll( JSONArray tbarArray )
+	public static <T extends RealType<T>> TbarCollection<T> loadAll( JSONArray tbarArray, T type )
 	{
 		ArrayList<TbarPrediction> tbars = new ArrayList<TbarPrediction>();
 		long[] min = new long[ 3 ];
@@ -189,7 +190,7 @@ public class TbarPrediction extends AbstractRealType<TbarPrediction> implements 
 //				System.out.println( "i: " + i + " out of ~100k" );
 //			}
 		}
-		return new TbarCollection( tbars, min, max );
+		return new TbarCollection<T>( tbars, min, max, type );
 	}
 
 	public static void updateMinMax( final long[] min, final long[] max, final TbarPrediction tbp )
@@ -233,21 +234,24 @@ public class TbarPrediction extends AbstractRealType<TbarPrediction> implements 
 		}
 	}
 
-	public static class TbarCollection implements Serializable
+	public static class TbarCollection< T extends RealType<T>> implements Serializable
 	{
 		private static final long serialVersionUID = -1063017232502453517L;
 
 		public final ArrayList<TbarPrediction> list;
 		public final long[] min;
 		public final long[] max;
+		private final T t;
 
 		public TbarCollection( 
 				final ArrayList<TbarPrediction> list,
 				final long[] min,
-				final long[] max ){
+				final long[] max,
+				T t ){
 			this.list = list;
 			this.min = min;
 			this.max = max;
+			this.t = t;
 		}
 
 		@Override
@@ -259,21 +263,48 @@ public class TbarPrediction extends AbstractRealType<TbarPrediction> implements 
 			out += Arrays.toString( max );
 			return out;
 		}
-		
-		public List<DoubleType> getValues( final double thresh )
+
+		public List<T> getValues( final double thresh )
 		{
 			return list.stream()
-					.map( x -> x.confidence > thresh ? new DoubleType(1) : new DoubleType( 0 ) )
+					.map( x -> x.confidence > thresh ? one() : zero() )
 					.collect( Collectors.toList() );
 		}
-		
+
+		public List<T> getValues()
+		{
+			return list.stream()
+					.map( x -> set( x.confidence ))
+					.collect( Collectors.toList() );
+		}
+
+		private T set( double v )
+		{
+			T out = t.createVariable();
+			out.setReal( v );
+			return out;
+		}
+
+		private T zero()
+		{
+			T out = t.createVariable();
+			out.setZero();
+			return out;
+		}
+
+		private T one()
+		{
+			T out = t.createVariable();
+			out.setOne();
+			return out;
+		}
+
 		public List<RealPoint> getPoints()
 		{
 			return list.stream()
 					.map( x -> new RealPoint( (double)x.location[0], (double)x.location[1], (double)x.location[2] ))
 					.collect( Collectors.toList() );
 		}
-		
 	}
 
 	public static List<RealPoint> transformPoints( final List<RealPoint> pts, final RealTransform xfm )
