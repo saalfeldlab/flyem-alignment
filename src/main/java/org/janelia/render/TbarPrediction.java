@@ -317,6 +317,10 @@ public class TbarPrediction extends AbstractRealType<TbarPrediction> implements 
 	{
 		RealPoint out = new RealPoint( pt.numDimensions() );
 		xfm.apply( pt, out );
+		if( Double.isNaN( out.getDoublePosition( 0 )) )
+		{
+			System.out.println( "  tgt pt : " + pt );
+		}
 		return out;
 	}
 

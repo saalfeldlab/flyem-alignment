@@ -35,6 +35,7 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 	public SynProperties props;
 	public int[] location;
 	public double[] locationDouble;
+	public double error;
 
 	public SynPrediction(){}
 
@@ -43,6 +44,14 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 		this.kind = kind;
 		this.location = location;
 		props = new SynProperties( conf );
+		error = 0;
+	}
+	
+	public SynPrediction( final String kind, final int[] location, 
+			final double conf, final double error )
+	{
+		this( kind, location, conf );
+		this.error = error;
 	}
 	
 	public SynPrediction( final String kind, final double[] location, final double conf )
@@ -50,6 +59,14 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 		this.kind = kind;
 		this.locationDouble = location;
 		props = new SynProperties( conf );
+		error = 0;
+	}
+	
+	public SynPrediction( final String kind, final double[] location,
+			final double conf, final double error )
+	{
+		this( kind, location, conf );
+		this.error = error;
 	}
 	
 	public SynPrediction( final String kind, final RealPoint location, final double conf )
@@ -58,7 +75,15 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 		props = new SynProperties( conf );
 
 		locationDouble = new double[ location.numDimensions() ];
-		location.localize( locationDouble );		
+		location.localize( locationDouble );
+		error = 0;
+	}
+	
+	public SynPrediction( final String kind, final RealPoint location,
+			final double conf, final double error  )
+	{
+		this( kind, location, conf );
+		this.error = error;
 	}
 	
 	public static void main( String[] args ) throws IOException
@@ -281,6 +306,15 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 				final List<DoubleType> vals,
 				T t )
 		{
+			this( pt, vals, null, t );
+		}
+		
+		public SynCollection(
+				final List<RealPoint> pt,
+				final List<DoubleType> vals,
+				final List<Double> errs,
+				T t )
+		{
 			assert pt.size() == vals.size();
 
 			ArrayList<SynPrediction> splist = new ArrayList<SynPrediction>();
@@ -307,8 +341,12 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 					if( vc > max[ j ] )
 						max[ j ] = vc;
 				}
+				
+				double error = 0;
+				if( errs != null )
+					error = errs.get( i );
 
-				SynPrediction sp = new SynPrediction( "PreSyn", pos, conf );
+				SynPrediction sp = new SynPrediction( "PreSyn", pos, conf, error );
 				splist.add( sp );
 			}
 
@@ -317,11 +355,25 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 			this.max = max;
 			this.t = t;
 		}
+		
+		public double fractionFailed()
+		{
+			double nFailures = 0.0;
+			for( int i = 0; i < list.size(); i++ )
+			{
+				if ( Double.isNaN( list.get( i ).locationDouble[ 0 ] ) )
+					nFailures += 1.0;
+			}
+			
+//			System.out.println( 
+//					String.format("%d of %d failed ( %f )", nFailures, list.size(), (nFailures / list.size())));
+
+			return nFailures;
+		}
 
 		@Override
 		public String toString()
 		{
-			System.out.println( "tostring" );
 			String out = "Synapses ( " + list.size() + ") ";
 			out += Arrays.toString( min ) + " : ";
 			out += Arrays.toString( max );
@@ -510,10 +562,11 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 	{
 		JSONObject p = new JSONObject();
 		p.put( "conf", this.props.conf );
-
+		p.put( "err", this.error );
+		
 		JSONObject obj = new JSONObject();
 		obj.put( "Kind", this.kind );
-		
+
 		if( this.location != null )
 			obj.put( "Pos", this.location );
 		else if ( this.locationDouble != null )
