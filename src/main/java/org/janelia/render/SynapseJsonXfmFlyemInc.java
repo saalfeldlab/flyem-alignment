@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -19,6 +20,8 @@ import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 
+import net.imglib2.FinalInterval;
+import net.imglib2.Interval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
 import net.imglib2.exception.ImgLibException;
@@ -181,6 +184,9 @@ public class SynapseJsonXfmFlyemInc<T extends RealType<T>,P extends RealLocaliza
 				synapsePaths.size() == botDatasetNames.size() &&
 				synapsePaths.size() == outputList.size());
 		
+		boolean fixZ = true;
+		System.out.println( "fixZ : " + fixZ );
+		
 		final N5Reader n5 = N5.openFSReader( n5Path );
 
 		final AffineTransform3D toFlyEm = new AffineTransform3D();
@@ -203,32 +209,34 @@ public class SynapseJsonXfmFlyemInc<T extends RealType<T>,P extends RealLocaliza
 			String name = synapseFile.getName();
 
 			// load synapses
-			List<RealPoint> ptList;
-			List< DoubleType > values;
+			
 			
 			boolean newSynapseJson = false; 
-			if(  synapseFile.getName().startsWith( "cx" ))
-			{
-				System.out.println("loading synapses new");
-				SynCollection<DoubleType> synapses = SynPrediction.loadAll( synapseFile.getAbsolutePath(), new DoubleType() );
-				System.out.println( synapses );
-
-				System.out.println( "outFile: " + outFile );
-
-				newSynapseJson = true;
-				ptList = synapses.getPoints();
-				values = synapses.getValues();
-			}
-			else
-			{
-				System.out.println("loading tbars old");
-				TbarCollection<DoubleType> tbars = TbarPrediction.loadAll( synapseFile.getAbsolutePath(), new DoubleType() );
-
-				System.out.println( "outFile: " + outFile );
-				System.out.println( tbars );
-				ptList = tbars.getPoints();
-				values = tbars.getValues();
-			}
+			PtsAndValues pav = load( synapseFile.getAbsolutePath() );
+			List<RealPoint> ptList = pav.ptList;
+			List< DoubleType > values = pav.values;
+//			if(  synapseFile.getName().startsWith( "cx" ))
+//			{
+//				System.out.println("loading synapses new");
+//				SynCollection<DoubleType> synapses = SynPrediction.loadAll( synapseFile.getAbsolutePath(), new DoubleType() );
+//				System.out.println( synapses );
+//
+//				System.out.println( "outFile: " + outFile );
+//
+//				newSynapseJson = true;
+//				ptList = synapses.getPoints();
+//				values = synapses.getValues();
+//			}
+//			else
+//			{
+//				System.out.println("loading tbars old");
+//				TbarCollection<DoubleType> tbars = TbarPrediction.loadAll( synapseFile.getAbsolutePath(), new DoubleType() );
+//
+//				System.out.println( "outFile: " + outFile );
+//				System.out.println( tbars );
+//				ptList = tbars.getPoints();
+//				values = tbars.getValues();
+//			}
 			
 			String topDatasetName = topDatasetNames.get( i );
 			String botDatasetName = botDatasetNames.get( i );
@@ -258,10 +266,10 @@ public class SynapseJsonXfmFlyemInc<T extends RealType<T>,P extends RealLocaliza
 
 			double zOffset = SLAB_2_ZOFFSETS().get( slabNum );
 			AffineTransform3D zOffsetXfm = new AffineTransform3D();
-			zOffsetXfm.set( -zOffset, 2, 3 );
+			zOffsetXfm.set( zOffset, 2, 3 );
 
 			System.out.println( "slabNum : " + slabNum );
-			System.out.println( "zOffset : " + zOffset );
+			System.out.println( "zOffset : " + zOffsetXfm );
 			System.out.println( "ioffset : " + itvl_offset );
 			
 			ArrayList<RealTransform> before = new ArrayList<RealTransform>();
@@ -272,10 +280,12 @@ public class SynapseJsonXfmFlyemInc<T extends RealType<T>,P extends RealLocaliza
 			after.add( zOffsetXfm );
 			after.add( toFlyEm );
 
+			
 			IncrementalInverter inv = new IncrementalInverter( before, transition, after, 0.34 );
 			inv.setToleranceIncreaseFactor( 2 );
-			inv.setDefaultIndex( 1 );
-
+			inv.setDefaultIndex( 1 );			
+			inv.setFixZ( fixZ );
+			
 			RealPointErrorList pts_xfm = transformPointsWithErrors( ptList, inv );
 			
 			SynCollection< DoubleType > syns_xfm = new SynCollection< DoubleType >( 
@@ -284,13 +294,14 @@ public class SynapseJsonXfmFlyemInc<T extends RealType<T>,P extends RealLocaliza
 					pts_xfm.errs,
 					new DoubleType() );
 			
+			System.out.println( "transformed synapses: " + syns_xfm );
 			// System.out.println( "fraction failed: " + syns_xfm.fractionFailed() ); 
 			
 			SynPrediction.write( syns_xfm, outFile.getAbsolutePath() );
 
 		}
 	}
-
+	
 	/**
 	 * Hard-coded map from slab id's to z-offsets 
 	 * @return
@@ -310,7 +321,7 @@ public class SynapseJsonXfmFlyemInc<T extends RealType<T>,P extends RealLocaliza
 		map.put( 31, 23827.0 );
 		map.put( 32, 26507.0 );
 		map.put( 33, 29176.0 );
-		map.put( 34, 29176.0 );
+		map.put( 34, 31772.0 );
 		return map;
 	}
 	
@@ -345,6 +356,13 @@ public class SynapseJsonXfmFlyemInc<T extends RealType<T>,P extends RealLocaliza
 			xfm.apply( source, target );
 			ptsAndErrs.add( RealPoint.wrap( target ), xfm.getBestError() );
 			
+//			if( target[0] < 29743 || 
+//				target[0] > 32360 )
+//			{
+//				System.out.println("p : " + p +
+//						" went to : " + Arrays.toString(target));
+//			}
+			
 			i++;
 		}
 		return ptsAndErrs;
@@ -363,6 +381,65 @@ public class SynapseJsonXfmFlyemInc<T extends RealType<T>,P extends RealLocaliza
 		{
 			pts.add( pt );
 			errs.add( err );
+		}
+	}
+	
+	public static PtsAndValues load( String synapseFilePath )
+	{
+		boolean success = false;
+		PtsAndValues output = null;
+		String errNew = "";
+		String errOld = "";
+		try
+		{
+			SynCollection<DoubleType> synapses = SynPrediction.loadAll( synapseFilePath, new DoubleType() );
+			System.out.println( "tbars: " + synapses );
+			output = new PtsAndValues( synapses.getPoints(), synapses.getValues() );
+			success = true;
+		}
+		catch( Exception e )
+		{
+			System.out.println( "Not a new synapse json" );
+			errNew = e.getMessage();
+		}
+		
+		if( success )
+			return output;
+		
+		try
+		{
+			TbarCollection<DoubleType> tbars = TbarPrediction.loadAll( synapseFilePath, new DoubleType() );
+			System.out.println( "tbars: " + tbars );
+			output = new PtsAndValues( tbars.getPoints(), tbars.getValues() );
+			success = true;
+		}
+		catch( Exception e )
+		{
+			System.out.println( "Not an old synapse json" );
+			errOld = e.getMessage();
+		}
+		
+		if( !success )
+		{
+			System.err.println( "Could not read synapses/tbars " );
+			System.err.println( "new format error: \n " + errNew );
+			System.err.println( "old format error: \n " + errOld );
+		}
+
+		return output;
+	}
+	
+	public static class PtsAndValues
+	{
+		public final List<RealPoint> ptList;
+		public final List< DoubleType > values;
+		
+		public PtsAndValues(
+				final List<RealPoint> ptList,
+				final List< DoubleType > values )
+		{
+			this.ptList = ptList;
+			this.values = values;
 		}
 	}
 }

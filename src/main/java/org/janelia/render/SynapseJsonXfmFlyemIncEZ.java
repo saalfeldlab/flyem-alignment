@@ -57,7 +57,7 @@ public class SynapseJsonXfmFlyemIncEZ<T extends RealType<T>,P extends RealLocali
 		/**
 		 * @return the transform top dataset names
 		 */
-		public List<Integer> getSlabNumbesr() {
+		public List<Integer> getSlabNumbers() {
 
 			return slabNumbers;
 		}
@@ -80,7 +80,47 @@ public class SynapseJsonXfmFlyemIncEZ<T extends RealType<T>,P extends RealLocali
 
 	}
 
-	public static List<Long> topOffsets( List<Integer> slabnums )
+	public static List<Long> topOffsetsGary( List<Integer> slabnums )
+	{
+		final HashMap<Integer,Integer> map = new HashMap<Integer,Integer>();
+		map.put( 22,   20 );
+		map.put( 23, 1109 );
+		map.put( 24,   20 );
+		map.put( 25, 1152 );
+		map.put( 26, 2152 );
+		map.put( 27, 1624 );
+		map.put( 28,   20 );
+		map.put( 29,   20 );
+		map.put( 30,   20 );
+		map.put( 31,   20 );
+		map.put( 32,   20 );
+		map.put( 33,   20 );
+		map.put( 34,   20 );
+
+		return slabnums.stream().map( x -> new Long( map.get( x )) ).collect( Collectors.toList() );
+	}
+	
+	public static List<Long> botOffsetsGary( List<Integer> slabnums )
+	{
+		final HashMap<Integer,Integer> map = new HashMap<Integer,Integer>();
+		map.put( 22, 2086 );
+		map.put( 23, 3725 );
+		map.put( 24, 2909 );
+		map.put( 25, 3963 );
+		map.put( 26, 4988 );
+		map.put( 27, 4338 );
+		map.put( 28, 2613 );
+		map.put( 29, 2685 );
+		map.put( 30, 2648 );
+		map.put( 31, 2699 );
+		map.put( 32, 2688 );
+		map.put( 33, 2615 );
+		map.put( 34, 2674 );
+
+		return slabnums.stream().map( x -> new Long( map.get( x )) ).collect( Collectors.toList() );
+	}
+	
+	public static List<Long> topOffsetsStephan( List<Integer> slabnums )
 	{
 		final HashMap<Integer,Integer> map = new HashMap<Integer,Integer>();
 		map.put( 22, 20 );
@@ -100,7 +140,7 @@ public class SynapseJsonXfmFlyemIncEZ<T extends RealType<T>,P extends RealLocali
 		return slabnums.stream().map( x -> new Long( map.get( x )) ).collect( Collectors.toList() );
 	}
 	
-	public static List<Long> botOffsets( List<Integer> slabnums )
+	public static List<Long> botOffsetsStephan( List<Integer> slabnums )
 	{
 		final HashMap<Integer,Integer> map = new HashMap<Integer,Integer>();
 		map.put( 22, 2086 );
@@ -134,11 +174,11 @@ public class SynapseJsonXfmFlyemIncEZ<T extends RealType<T>,P extends RealLocali
 		if( !options.parsedSuccessfully )
 			return;
 		
-		List<Long> topOffsets = topOffsets( options.getSlabNumbesr() );
-		List<Long> botOffsets = botOffsets( options.getSlabNumbesr() );
+		List<Long> topOffsets = topOffsetsGary( options.getSlabNumbers() );
+		List<Long> botOffsets = botOffsetsGary( options.getSlabNumbers() );
 		
-		List<String> topDatasetNames = offsetDataNames( options.getSlabNumbesr(), "top" );
-		List<String> botDatasetNames = offsetDataNames( options.getSlabNumbesr(), "bot" );
+		List<String> topDatasetNames = offsetDataNames( options.getSlabNumbers(), "top" );
+		List<String> botDatasetNames = offsetDataNames( options.getSlabNumbers(), "bot" );
 
 		System.out.println( "n5path : " + options.getN5Path() );
 		System.out.println( " " );
