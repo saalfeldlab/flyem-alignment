@@ -36,6 +36,8 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 
 	DenseMatrix64F target;
 
+	boolean fixZ = false;
+
 	double error = 9999.0;
 
 	double stepSz = 1.0;
@@ -59,7 +61,9 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 	private RealTransform xfm;
 	
 	private double[] guess; // initialization for iterative inverse
-
+	private double[] src;
+	private double[] tgt;
+	
 	protected static Logger logger = LogManager.getLogger(
 			PosFieldTransformInverseGradientDescent.class.getName() );
 
@@ -72,6 +76,9 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 		directionalDeriv = new DenseMatrix64F( ndims, 1 );
 		descentDirectionMag = new DenseMatrix64F( 1, 1 );
 		jacobian = new DenseMatrix64F( ndims, ndims );
+		
+		src = new double[ ndims ];
+		tgt = new double[ ndims ];
 	}
 
 	public void setBeta( double beta )
@@ -94,11 +101,16 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 		this.maxIters = maxIters;
 	}
 
+	public void setFixZ( boolean fixZ )
+	{
+		this.fixZ = fixZ;
+	}
+
 	public void setStepSize( double stepSize )
 	{
 		stepSz = stepSize;
 	}
-	
+
 	public void setMinStep( double minStep )
 	{
 		this.minStepSize = minStep;
@@ -184,8 +196,16 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 		this.guess = guess;
 	}
 	
-	public void apply( final double[] src, final double[] tgt )
+	public void apply( final double[] s, final double[] t )
 	{
+		
+		// needs to be able to work in place,
+		// so dont work with s and t directly
+        //
+        // copy s into src
+		System.arraycopy( s, 0, src, 0, s.length );
+
+		
 		// initial guess is source
 		if( guess != null )
 			System.arraycopy( guess, 0, tgt, 0, guess.length );
@@ -194,6 +214,9 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 
 		// tgt is the error estimate
 		double err = inverseTol( src, tgt, tolerance, maxIters );
+		
+        // copy tgt into t
+		System.arraycopy( tgt, 0, t, 0, t.length );
 		
 //		if( err > tolerance )
 //			System.out.println( "err: " + err + " >  EPS ( " + tolerance + " )" );
@@ -214,7 +237,6 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 	
 	public void apply( final RealLocalizable src, final RealPositionable tgt )
 	{
-		System.out.println("APPLY LOC POS");
 		double[] srcd = new double[ src.numDimensions() ];
 		double[] tgtd = new double[ tgt.numDimensions() ];
 		src.localize( srcd );
@@ -260,7 +282,7 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 			estimateJacobian( jacobianEstimateStep );
 			computeDirection();
 
-//			System.out.println( "jac : " + jacobian);
+			System.out.println( "jac : " + jacobian);
 
 			/* the two below lines should give identical results */
 //			t = backtrackingLineSearch( c, beta, stepSizeMaxTries, t0 );
@@ -269,8 +291,8 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 			if ( t == 0.0 )
 				break;
 
-//			System.out.println(" step size: " + t );
-//			System.out.println(" direction : " + dir );
+			System.out.println(" step size: " + t );
+			System.out.println(" direction : " + dir );
 
 			updateEstimate( t );  // go in negative direction to reduce cost
 			updateError();
@@ -336,14 +358,14 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 		double[] q = new double[ ndims ];
 		double[] qc = new double[ ndims ];
 		
-//		System.out.println( " " );
-//		System.out.println( "########################################" );
+		System.out.println( " " );
+		System.out.println( "########################################" );
 		
 		xfm.apply( srcpt, qc );
 
-//		System.out.println( "sc : " + Arrays.toString( srcpt ));
-//		System.out.println( "qc : " + Arrays.toString( qc ));
-//		System.out.println( " " );
+		System.out.println( "sc : " + Arrays.toString( srcpt ));
+		System.out.println( "qc : " + Arrays.toString( qc ));
+		System.out.println( " " );
 
 		for( int i = 0; i < ndims; i++ )
 		{
@@ -355,14 +377,14 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 
 			xfm.apply( p, q );
 			
-//			System.out.println( "p : " + Arrays.toString(p));
-//			System.out.println( "q : " + Arrays.toString(q));
-//			System.out.println( " " );
+			System.out.println( "p : " + Arrays.toString(p));
+			System.out.println( "q : " + Arrays.toString(q));
+			System.out.println( " " );
 			
 			for( int j = 0; j < ndims; j++ )
 			{
-//				jacobian.set( i, j, ( q[j] - qc[j] ) / step );
-				jacobian.set( j, i, ( q[j] - qc[j] ) / step );
+				jacobian.set( i, j, ( q[j] - qc[j] ) / step );
+//				jacobian.set( j, i, ( q[j] - qc[j] ) / step );
 			}
 		}
 //		System.out.println( "########################################" );

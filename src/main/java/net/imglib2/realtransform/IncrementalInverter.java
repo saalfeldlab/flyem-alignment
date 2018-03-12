@@ -1,8 +1,12 @@
 package net.imglib2.realtransform;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
-public class IncrementalInverter
+import net.imglib2.RealLocalizable;
+import net.imglib2.RealPositionable;
+
+public class IncrementalInverter implements RealTransform
 {
 
 	private RealTransformSequence totalXfm;
@@ -10,6 +14,7 @@ public class IncrementalInverter
 	private RealTransform fwdXfm;
 	private PosFieldTransformInverseGradientDescent invXfm;
 
+	private final double initialTolerance;
 	private double tolerance = 0.34;
 	private double toleranceIncreaseFactor = 2;
 	private int maxTries = 15;
@@ -58,11 +63,12 @@ public class IncrementalInverter
 			ArrayList<RealTransform> after,
 			double initialTolerance )
 	{
+		this.initialTolerance = initialTolerance;
 		tolerance = initialTolerance;
 		inverterIndex = 0;
 
-		this.fwdXfm = fwd;
 		this.before = before;
+		this.fwdXfm = fwd;
 		this.after = after;
 
 		estimates = new ArrayList< double[] >();
@@ -79,9 +85,16 @@ public class IncrementalInverter
 		this.toleranceIncreaseFactor = factor;
 	}
 	
-	public PosFieldTransformInverseGradientDescent getInverter()
+	boolean fixZ = false;
+	public void setFixZ( boolean fixZ )
+	{
+		this.fixZ = fixZ;
+	}
+	
+	public PosFieldTransformInverseGradientDescent getNextInverter()
 	{
 		invXfm = new PosFieldTransformInverseGradientDescent( 3, fwdXfm );
+		
 		if( inverterIndex < C_LIST.length )
 		{
 			invXfm.setTolerance( tolerance );
@@ -105,7 +118,7 @@ public class IncrementalInverter
 			invXfm.setMaxStep( MAX_STEP_LIST[ defaultIndex ] );
 			invXfm.setMinStep( MIN_STEP_LIST[ defaultIndex ] );
 		}
-		
+		invXfm.setFixZ( fixZ );
 		return invXfm;
 	}
 
@@ -118,36 +131,59 @@ public class IncrementalInverter
 
 	public void run( double[] src, double[] target, double[] guess )
 	{
+
+		inverterIndex = 0;
+		tolerance = initialTolerance;
 		estimates.clear();
 		errors.clear();
-
+		
 		bestError = Double.MAX_VALUE;
 		bestEstimate = null;
 
-		inverterIndex = 0;
 		int i = 0;
 		while( i < maxTries  )
 		{
 			/* Build the transformation */
 			totalXfm = new RealTransformSequence();
-			if( before != null )
-				for( RealTransform x : before )
-					totalXfm.add( x );
+			if( before != null ) {
+				for( RealTransform bx : before )
+				{
+//					System.out.println( "before adding " + bx );
+					totalXfm.add( bx );
+				}
+			}
 			
 			if( bestEstimate != null )
 				System.arraycopy( bestEstimate, 0, guess, 0, bestEstimate.length );
 
-			totalXfm.add( getInverter() );
+			invXfm = getNextInverter();
 			invXfm.setGuess( guess );
-			
-			if( after != null )
-				for( RealTransform x : after )
-					totalXfm.add( x );
 
+			totalXfm.add( invXfm );
+			
+//			System.out.println( invXfm );
+			
+			if( after != null ) {
+				for( RealTransform ax : after )
+				{
+//					System.out.println( "after adding " + ax );
+					totalXfm.add( ax );
+				}
+			}
 
 			/* Apply it */
 			totalXfm.apply( src, target );
+			
+//			if( Double.isNaN(target[0]))
+//			{
+//				System.out.println("noes");
+//			}
+			
+//			System.out.println( "src : " + Arrays.toString( src ));
+//			System.out.println( "guess : " + Arrays.toString( guess ));
+//			System.out.println( "target : " + Arrays.toString( target ));
 
+			
 			/* Add to list */
 			double[] thisEstimate = new double[ target.length ];
 			System.arraycopy( target, 0, thisEstimate, 0, target.length );
@@ -158,6 +194,7 @@ public class IncrementalInverter
 
 //			System.out.println("tol : " + tolerance );
 //			System.out.println( "err: " + err );
+//			System.out.println( " " );
 
 			if( err < bestError )
 			{
@@ -173,6 +210,18 @@ public class IncrementalInverter
 			i++;
 			inverterIndex++;
 		}
+		
+		if( bestEstimate == null || target == null ||
+				Double.isNaN( target[0] )  )
+		{
+			System.err.println("Warning: transform at or near point " +
+					Arrays.toString( src ) +
+					" may be singular, can't invert." );
+
+			bestEstimate = new double[ 3 ];
+			bestError = 987654321;
+		}
+		
 		System.arraycopy( bestEstimate, 0, target, 0, target.length );
 	}
 
@@ -184,5 +233,40 @@ public class IncrementalInverter
 	public double getBestError()
 	{
 		return bestError;
+	}
+
+	
+	/**
+	 * Source and target dimensions are flipped relative to fwd
+	 */
+	@Override
+	public int numSourceDimensions()
+	{
+		return fwdXfm.numTargetDimensions();
+	}
+
+	/**
+	 * Source and target dimensions are flipped relative to fwd
+	 */
+	@Override
+	public int numTargetDimensions()
+	{
+		return fwdXfm.numSourceDimensions();
+	}
+
+	@Override
+	public void apply( RealLocalizable source, RealPositionable target )
+	{
+		double[] s = new double[ source.numDimensions() ];
+		double[] t = new double[ target.numDimensions() ];
+		source.localize( s );
+		apply( s, t );
+		target.setPosition( t );
+	}
+
+	@Override
+	public RealTransform copy()
+	{
+		return null;
 	}
 }
