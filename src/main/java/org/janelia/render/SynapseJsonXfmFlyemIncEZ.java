@@ -87,7 +87,7 @@ public class SynapseJsonXfmFlyemIncEZ<T extends RealType<T>,P extends RealLocali
 		map.put( 23, 1109 );
 		map.put( 24,   20 );
 		map.put( 25, 1152 );
-		map.put( 26, 2152 );
+		map.put( 26, 2154 );
 		map.put( 27, 1624 );
 		map.put( 28,   20 );
 		map.put( 29,   20 );
@@ -107,7 +107,7 @@ public class SynapseJsonXfmFlyemIncEZ<T extends RealType<T>,P extends RealLocali
 		map.put( 23, 3725 );
 		map.put( 24, 2909 );
 		map.put( 25, 3963 );
-		map.put( 26, 4988 );
+		map.put( 26, 4990 );
 		map.put( 27, 4338 );
 		map.put( 28, 2613 );
 		map.put( 29, 2685 );
@@ -198,7 +198,8 @@ public class SynapseJsonXfmFlyemIncEZ<T extends RealType<T>,P extends RealLocali
 				topOffsets,
 				botOffsets,
 				topDatasetNames,
-				botDatasetNames );
+				botDatasetNames,
+				true );
 	 }
 
 }
