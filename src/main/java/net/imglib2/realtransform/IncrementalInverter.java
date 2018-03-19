@@ -17,6 +17,7 @@ public class IncrementalInverter implements RealTransform
 	private final double initialTolerance;
 	private double tolerance = 0.34;
 	private double toleranceIncreaseFactor = 2;
+
 	private int maxTries = 15;
 	
 	private int inverterIndex;
@@ -31,6 +32,8 @@ public class IncrementalInverter implements RealTransform
 	
 	private double[] bestEstimate;
 	private double bestError;
+
+	private boolean fixZ = true;
 	
 	static final double[] C_LIST = new double[]{
 			0.000001, 
@@ -84,8 +87,7 @@ public class IncrementalInverter implements RealTransform
 	{
 		this.toleranceIncreaseFactor = factor;
 	}
-	
-	boolean fixZ = false;
+
 	public void setFixZ( boolean fixZ )
 	{
 		this.fixZ = fixZ;
@@ -143,6 +145,9 @@ public class IncrementalInverter implements RealTransform
 		int i = 0;
 		while( i < maxTries  )
 		{
+			
+//			System.out.println( "Try: " + i );
+
 			/* Build the transformation */
 			totalXfm = new RealTransformSequence();
 			if( before != null ) {
@@ -153,11 +158,12 @@ public class IncrementalInverter implements RealTransform
 				}
 			}
 			
-			if( bestEstimate != null )
-				System.arraycopy( bestEstimate, 0, guess, 0, bestEstimate.length );
-
 			invXfm = getNextInverter();
-			invXfm.setGuess( guess );
+
+//			if( bestEstimate != null )
+//				System.arraycopy( bestEstimate, 0, guess, 0, bestEstimate.length );
+//
+//			invXfm.setGuess( guess );
 
 			totalXfm.add( invXfm );
 			

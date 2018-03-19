@@ -279,10 +279,14 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 		while ( error >= tolerance && k < maxIters )
 		{
 //			computeDirection( guess, guessXfm );
-			estimateJacobian( jacobianEstimateStep );
+
+			if( fixZ )
+				estimateJacobian2d( jacobianEstimateStep );
+			else
+				estimateJacobian( jacobianEstimateStep );
+
 			computeDirection();
 
-			System.out.println( "jac : " + jacobian);
 
 			/* the two below lines should give identical results */
 //			t = backtrackingLineSearch( c, beta, stepSizeMaxTries, t0 );
@@ -291,8 +295,9 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 			if ( t == 0.0 )
 				break;
 
-			System.out.println(" step size: " + t );
-			System.out.println(" direction : " + dir );
+//			System.out.println(" step size: " + t );
+//			System.out.println( "jac : " + jacobian);
+//			System.out.println(" direction : " + dir );
 
 			updateEstimate( t );  // go in negative direction to reduce cost
 			updateError();
@@ -358,14 +363,14 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 		double[] q = new double[ ndims ];
 		double[] qc = new double[ ndims ];
 		
-		System.out.println( " " );
-		System.out.println( "########################################" );
+//		System.out.println( " " );
+//		System.out.println( "########################################" );
 		
 		xfm.apply( srcpt, qc );
 
-		System.out.println( "sc : " + Arrays.toString( srcpt ));
-		System.out.println( "qc : " + Arrays.toString( qc ));
-		System.out.println( " " );
+//		System.out.println( "sc : " + Arrays.toString( srcpt ));
+//		System.out.println( "qc : " + Arrays.toString( qc ));
+//		System.out.println( " " );
 
 		for( int i = 0; i < ndims; i++ )
 		{
@@ -377,15 +382,57 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 
 			xfm.apply( p, q );
 			
-			System.out.println( "p : " + Arrays.toString(p));
-			System.out.println( "q : " + Arrays.toString(q));
-			System.out.println( " " );
+//			System.out.println( "p : " + Arrays.toString(p));
+//			System.out.println( "q : " + Arrays.toString(q));
+//			System.out.println( " " );
 			
 			for( int j = 0; j < ndims; j++ )
 			{
-				jacobian.set( i, j, ( q[j] - qc[j] ) / step );
-//				jacobian.set( j, i, ( q[j] - qc[j] ) / step );
+//				jacobian.set( i, j, ( q[j] - qc[j] ) / step );
+				jacobian.set( j, i, ( q[j] - qc[j] ) / step );
 			}
+		}
+//		System.out.println( "########################################" );
+	}
+	
+	public void estimateJacobian2d( double step )
+	{
+		double[] srcpt = estimate.data;
+
+		double[] p = new double[ ndims ];
+		double[] q = new double[ ndims ];
+		double[] qc = new double[ ndims ];
+		
+//		System.out.println( " " );
+//		System.out.println( "########################################" );
+		
+		xfm.apply( srcpt, qc );
+
+//		System.out.println( "FZ sc : " + Arrays.toString( srcpt ));
+//		System.out.println( "FZ qc : " + Arrays.toString( qc ));
+//		System.out.println( " " );
+
+//		int nd = 2;
+		for( int i = 0; i < ndims; i++ )
+		{
+			for( int j = 0; j < ndims; j++ )
+				if( j == i )
+					p [ j ] = srcpt[ j ] + step;
+				else
+					p [ j ] = srcpt[ j ];
+
+			xfm.apply( p, q );
+			
+//			System.out.println( "FZ p : " + Arrays.toString(p));
+//			System.out.println( "FZ q : " + Arrays.toString(q));
+//			System.out.println( " " );
+			
+			for( int j = 0; j < 2; j++ )
+			{
+//				jacobian.set( i, j, ( q[j] - qc[j] ) / step );
+				jacobian.set( j, i, ( q[j] - qc[j] ) / step );
+			}
+			jacobian.set( 2, 2, 1.0 );
 		}
 //		System.out.println( "########################################" );
 	}

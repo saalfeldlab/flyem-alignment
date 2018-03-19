@@ -165,8 +165,8 @@ public class SynapseJsonXfmFlyemInc<T extends RealType<T>,P extends RealLocaliza
 				options.getTopOffsets(),
 				options.getBotOffsets(),
 				options.getTransformTopDatasetNames(),
-				options.getTransformBotDatasetNames()
-				);
+				options.getTransformBotDatasetNames(),
+				true );
 	 }
 
 	public static final void run(
@@ -176,7 +176,8 @@ public class SynapseJsonXfmFlyemInc<T extends RealType<T>,P extends RealLocaliza
 			List<Long> topOffsets,
 			List<Long> botOffsets,
 			List<String> topDatasetNames,
-			List<String> botDatasetNames ) throws IOException
+			List<String> botDatasetNames,
+			boolean fixZ ) throws IOException
 	{
 		assert( synapsePaths.size() == topOffsets.size() && 
 				synapsePaths.size() == botOffsets.size() &&
@@ -184,8 +185,8 @@ public class SynapseJsonXfmFlyemInc<T extends RealType<T>,P extends RealLocaliza
 				synapsePaths.size() == botDatasetNames.size() &&
 				synapsePaths.size() == outputList.size());
 		
-		boolean fixZ = true;
 		System.out.println( "fixZ : " + fixZ );
+		System.out.println( "No guess updating");
 		
 		final N5Reader n5 = N5.openFSReader( n5Path );
 
