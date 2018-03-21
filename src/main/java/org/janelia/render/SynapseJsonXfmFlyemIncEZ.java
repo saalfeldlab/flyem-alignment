@@ -199,7 +199,7 @@ public class SynapseJsonXfmFlyemIncEZ<T extends RealType<T>,P extends RealLocali
 				botOffsets,
 				topDatasetNames,
 				botDatasetNames,
-				true );
+				true, 0.1 );
 	 }
 
 }

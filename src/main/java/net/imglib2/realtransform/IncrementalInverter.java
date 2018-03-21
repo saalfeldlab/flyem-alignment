@@ -34,6 +34,7 @@ public class IncrementalInverter implements RealTransform
 	private double bestError;
 
 	private boolean fixZ = true;
+	private double jacReg = 0.1;
 	
 	static final double[] C_LIST = new double[]{
 			0.000001, 
@@ -93,6 +94,11 @@ public class IncrementalInverter implements RealTransform
 		this.fixZ = fixZ;
 	}
 	
+	public void setJacobianRegularization( final double jr )
+	{
+		this.jacReg = jr;
+	}
+	
 	public PosFieldTransformInverseGradientDescent getNextInverter()
 	{
 		invXfm = new PosFieldTransformInverseGradientDescent( 3, fwdXfm );
@@ -121,6 +127,8 @@ public class IncrementalInverter implements RealTransform
 			invXfm.setMinStep( MIN_STEP_LIST[ defaultIndex ] );
 		}
 		invXfm.setFixZ( fixZ );
+		invXfm.setJacobianRegularizationEps( jacReg );
+
 		return invXfm;
 	}
 

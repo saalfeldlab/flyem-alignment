@@ -51,6 +51,8 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 	int maxIters = 100;
 	
 	double jacobianEstimateStep = 1.0;
+	double jacobianRegularizationEps = 0.1;
+	DenseMatrix64F jacRegMatrix;
 	
 	int stepSizeMaxTries = 8;
 	
@@ -76,6 +78,10 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 		directionalDeriv = new DenseMatrix64F( ndims, 1 );
 		descentDirectionMag = new DenseMatrix64F( 1, 1 );
 		jacobian = new DenseMatrix64F( ndims, ndims );
+		
+		jacRegMatrix = CommonOps.identity( ndims, ndims );
+		CommonOps.scale( jacobianRegularizationEps, jacRegMatrix );
+		
 		
 		src = new double[ ndims ];
 		tgt = new double[ ndims ];
@@ -121,9 +127,16 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 		this.maxStepSize = maxStep;
 	}
 	
-	public void setJacobianEstimateStep( double jacStep )
+	public void setJacobianEstimateStep( final double jacStep )
 	{
 		this.jacobianEstimateStep = jacStep;
+	}
+	
+	public void setJacobianRegularizationEps( final double e )
+	{
+		this.jacobianRegularizationEps = e;
+		jacRegMatrix = CommonOps.identity( ndims, ndims );
+		CommonOps.scale( jacobianRegularizationEps, jacRegMatrix );
 	}
 
 	public void setStepSizeMaxTries( int stepSizeMaxTries )
@@ -285,6 +298,9 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 			else
 				estimateJacobian( jacobianEstimateStep );
 
+			if( jacobianRegularizationEps > 0 )
+				regularizeJacobian();
+			
 			computeDirection();
 
 
@@ -435,6 +451,16 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 			jacobian.set( 2, 2, 1.0 );
 		}
 //		System.out.println( "########################################" );
+	}
+	
+	public void regularizeJacobian()
+	{
+		// Changes jacobian (J) to be:
+		// 	   ( 1-eps ) * J + ( eps ) * I 
+		// 
+		// note jacRegMatrix = eps * I 
+		CommonOps.scale( ( 1 - jacobianRegularizationEps ), jacobian );
+		CommonOps.add( jacRegMatrix, jacobian, jacobian );
 	}
 
 	/**
