@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 import org.janelia.render.SynPrediction.SynCollection;
 import org.janelia.render.TbarPrediction.TbarCollection;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -190,7 +190,7 @@ public class SynapseJsonXfmFlyemInc<T extends RealType<T>,P extends RealLocaliza
 		System.out.println( "No guess updating");
 		System.out.println( "jacobian regularization : " + jacobianRegularization );
 		
-		final N5Reader n5 = N5.openFSReader( n5Path );
+		final N5Reader n5 = new N5FSReader( n5Path );
 
 		final AffineTransform3D toFlyEm = new AffineTransform3D();
 		toFlyEm.set(

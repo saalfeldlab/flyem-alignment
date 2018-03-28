@@ -24,10 +24,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
-import org.janelia.saalfeldlab.hotknife.AbstractOptions;
-import org.janelia.saalfeldlab.hotknife.util.Grid;
+import org.janelia.saalfeldlab.hotknife.util.AbstractOptions;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -182,7 +181,7 @@ public class TransformSingularityExample
 			final List<Long> botOffsets,
 			final VoxelDimensions voxelDimensions ) throws IOException {
 
-		final N5Reader n5 = N5.openFSReader(n5Path);
+		final N5Reader n5 = new N5FSReader(n5Path);
 
 		for (int i = 0; i < datasetNames.size(); ++i) {
 

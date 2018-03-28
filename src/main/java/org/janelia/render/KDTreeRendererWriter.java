@@ -42,6 +42,7 @@ import net.imglib2.realtransform.ClippedTransitionRealTransform;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRandomAccessible;
 import net.imglib2.realtransform.RealTransformSequence;
+import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
@@ -50,7 +51,7 @@ import net.imglib2.view.Views;
 import net.imglib2.view.composite.CompositeIntervalView;
 import net.imglib2.view.composite.RealComposite;
 
-public class KDTreeRendererWriter<P extends RealLocalizable>
+public class KDTreeRendererWriter<T extends RealType<T>, P extends RealLocalizable>
 {
 
 	@SuppressWarnings("serial")
@@ -172,20 +173,21 @@ public class KDTreeRendererWriter<P extends RealLocalizable>
 	static final double searchDistSqr = searchDist * searchDist;
 	static final double invSquareSearchDistance = 1.0 / searchDist / searchDist; 
 	
-	final KDTree< DoubleType > tree;
+	final KDTree< T > tree;
 	
-	public KDTreeRendererWriter( List<DoubleType> vals, List<P> pts )
+	public KDTreeRendererWriter( List<T> vals, List<P> pts )
 	{
-		tree = new KDTree< DoubleType >( vals, pts );
+		tree = new KDTree< T >( vals, pts );
 	}
 
-	public RealRandomAccessible<DoubleType> getRealRandomAccessible(
+	public RealRandomAccessible<T> getRealRandomAccessible(
 			final double searchDist,
-			final DoubleUnaryOperator rbf )
+			final DoubleUnaryOperator rbf,
+			final T t )
 	{
-		RBFInterpolator.RBFInterpolatorFactory< DoubleType > interp = 
-				new RBFInterpolator.RBFInterpolatorFactory< DoubleType >( 
-						rbf, searchDist, false, new DoubleType() );
+		RBFInterpolator.RBFInterpolatorFactory< T > interp = 
+				new RBFInterpolator.RBFInterpolatorFactory< T >( 
+						rbf, searchDist, false, t );
 
 		return Views.interpolate( tree, interp );
 	}
@@ -243,22 +245,22 @@ public class KDTreeRendererWriter<P extends RealLocalizable>
 			File synapseFile = new File( options.getSynapsePaths().get( i ));
 
 			// load synapses
-			KDTreeRenderer<RealPoint> treeRenderer = null;
+			KDTreeRenderer<DoubleType,RealPoint> treeRenderer = null;
 			if(  synapseFile.getName().startsWith( "cx" ))
 			{
 				System.out.println("loading synapses new");
-				SynCollection synapses = SynPrediction.loadAll( synapseFile.getAbsolutePath() );
+				SynCollection<DoubleType> synapses = SynPrediction.loadAll( synapseFile.getAbsolutePath(), new DoubleType() );
 				System.out.println( synapses );
-				treeRenderer = new KDTreeRenderer<RealPoint>( synapses.getValues( 0 ), synapses.getPoints() );
+				treeRenderer = new KDTreeRenderer<DoubleType,RealPoint>( synapses.getValues( 0 ), synapses.getPoints() );
 			}
 			else
 			{
 				System.out.println("loading synapses old");
-				TbarCollection tbars = TbarPrediction.loadAll( options.getSynapsePaths().get( i ) );
+				TbarCollection<DoubleType> tbars = TbarPrediction.loadAll( options.getSynapsePaths().get( i ), new DoubleType() );
 				System.out.println( tbars );
-				treeRenderer = new KDTreeRenderer<RealPoint>( tbars.getValues( 0 ), tbars.getPoints() );
+				treeRenderer = new KDTreeRenderer<DoubleType,RealPoint>( tbars.getValues( 0 ), tbars.getPoints() );
 			}
-			RealRandomAccessible< DoubleType > source= treeRenderer.getRealRandomAccessible( 
+			RealRandomAccessible< DoubleType > source = treeRenderer.getRealRandomAccessible( 
 					options.getRadius(),
 					KDTreeRendererWriter::rbf );
 			
@@ -271,7 +273,6 @@ public class KDTreeRendererWriter<P extends RealLocalizable>
 			final long[] fMin = Grid.floorScaled(boundsMin, 1);
 			final long[] fMax = Grid.ceilScaled(boundsMax, 1);
 
-			
 			// transform 
 			final RealTransform top = Transform.loadScaledTransform( n5, topDatasetName );
 			final RealTransform bot = Transform.loadScaledTransform( n5, botDatasetName );
@@ -321,7 +322,6 @@ public class KDTreeRendererWriter<P extends RealLocalizable>
 			offset.setTranslation(0, 0, -zOffset);
 			
 			final RealTransformSequence transformSequence = new RealTransformSequence();
-			
 			transformSequence.add( scale.inverse() );
 			transformSequence.add( offset );
 			transformSequence.add( transition );

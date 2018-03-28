@@ -4,21 +4,15 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.function.DoubleUnaryOperator;
 
 import org.janelia.render.SynPrediction.SynCollection;
 import org.janelia.render.TbarPrediction.TbarCollection;
-import org.janelia.saalfeldlab.hotknife.ViewAlignedSlabSeries.Options;
 import org.janelia.saalfeldlab.hotknife.util.Grid;
 import org.janelia.saalfeldlab.hotknife.util.Transform;
-import org.janelia.saalfeldlab.n5.N5;
+import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -28,40 +22,24 @@ import bdv.tools.transformation.TransformedSource;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
-import bigwarp.BigWarpExporter;
-import ij.IJ;
-import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
-import net.imglib2.Interval;
 import net.imglib2.KDTree;
-import net.imglib2.RandomAccess;
-import net.imglib2.RandomAccessible;
-import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.exception.ImgLibException;
-import net.imglib2.img.imageplus.FloatImagePlus;
-import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.interpolation.neighborsearch.RBFInterpolator;
-import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
-import net.imglib2.neighborsearch.RadiusNeighborSearch;
-import net.imglib2.neighborsearch.RadiusNeighborSearchOnKDTree;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.ClippedTransitionRealTransform;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRandomAccessible;
 import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.type.numeric.RealType;
-import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
-import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
-import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
-public class KDTreeRenderer<P extends RealLocalizable>
+public class KDTreeRenderer<T extends RealType<T>,P extends RealLocalizable>
 {
 
 	@SuppressWarnings("serial")
@@ -172,20 +150,21 @@ public class KDTreeRenderer<P extends RealLocalizable>
 	static final double searchDistSqr = searchDist * searchDist;
 	static final double invSquareSearchDistance = 1.0 / searchDist / searchDist; 
 	
-	final KDTree< DoubleType > tree;
+	final KDTree< T > tree;
 	
-	public KDTreeRenderer( List<DoubleType> vals, List<P> pts )
+	public KDTreeRenderer( List<T> vals, List<P> pts )
 	{
-		tree = new KDTree< DoubleType >( vals, pts );
+		tree = new KDTree< T >( vals, pts );
 	}
 
-	public RealRandomAccessible<DoubleType> getRealRandomAccessible(
+	public RealRandomAccessible<T> getRealRandomAccessible(
 			final double searchDist,
 			final DoubleUnaryOperator rbf )
 	{
-		RBFInterpolator.RBFInterpolatorFactory< DoubleType > interp = 
-				new RBFInterpolator.RBFInterpolatorFactory< DoubleType >( 
-						rbf, searchDist, false, new DoubleType() );
+		RBFInterpolator.RBFInterpolatorFactory< T > interp = 
+				new RBFInterpolator.RBFInterpolatorFactory< T >( 
+						rbf, searchDist, false,
+						tree.firstElement().copy() );
 
 		return Views.interpolate( tree, interp );
 	}
@@ -197,7 +176,7 @@ public class KDTreeRenderer<P extends RealLocalizable>
 		else
 			return 50 *( 1 - ( rsqr * invSquareSearchDistance ));
 	}
-
+	
 	public static void main( String[] args ) throws ImgLibException, IOException
 	{
 		BdvOptions opts = BdvOptions.options().numRenderingThreads( 16 );
@@ -206,7 +185,7 @@ public class KDTreeRenderer<P extends RealLocalizable>
 
 		List< String > datasetNames = options.getDatasets();
 		
-		final N5Reader n5 = N5.openFSReader( options.getN5Path() );
+		final N5Reader n5 = new N5FSReader( options.getN5Path() );
 
 
 		AffineTransform3D permuteYZ= new AffineTransform3D();
@@ -232,30 +211,39 @@ public class KDTreeRenderer<P extends RealLocalizable>
 //		for (int i = 0; i < 1; ++i) {
 
 			File synapseFile = new File( options.getSynapsePaths().get( i ));
+			
+			String topDatasetName = options.getTransformTopDatasetNames().get( i );
+			String botDatasetName = options.getTransformBotDatasetNames().get( i );
+			
+			
 
 			// load synapses
-			KDTreeRenderer<RealPoint> treeRenderer = null;
+			KDTreeRenderer<DoubleType,RealPoint> treeRenderer = null;
+			FinalInterval itvl;
 			if(  synapseFile.getName().startsWith( "cx" ))
 			{
 				System.out.println("loading synapses new");
-				SynCollection synapses = SynPrediction.loadAll( synapseFile.getAbsolutePath() );
+				SynCollection<DoubleType> synapses = SynPrediction.loadAll( synapseFile.getAbsolutePath(), new DoubleType() );
+				itvl = new FinalInterval( synapses.min, synapses.max );
 				System.out.println( synapses );
-				treeRenderer = new KDTreeRenderer<RealPoint>( synapses.getValues( 0 ), synapses.getPoints() );
+				treeRenderer = new KDTreeRenderer<DoubleType,RealPoint>( synapses.getValues( 0 ), synapses.getPoints() );
 			}
 			else
 			{
 				System.out.println("loading synapses old");
-				TbarCollection tbars = TbarPrediction.loadAll( options.getSynapsePaths().get( i ) );
+				TbarCollection<DoubleType> tbars = TbarPrediction.loadAll( options.getSynapsePaths().get( i ), new DoubleType() );
+				itvl = new FinalInterval( tbars.min, tbars.max );
 				System.out.println( tbars );
-				treeRenderer = new KDTreeRenderer<RealPoint>( tbars.getValues( 0 ), tbars.getPoints() );
+				treeRenderer = new KDTreeRenderer<DoubleType,RealPoint>( tbars.getValues( 0 ), tbars.getPoints() );
 			}
+			
+			
 
-			RealRandomAccessible< DoubleType > source= treeRenderer.getRealRandomAccessible( 
+			RealRandomAccessible< DoubleType > source = treeRenderer.getRealRandomAccessible( 
 					options.getRadius(),
 					KDTreeRenderer::rbf );
 			
-			String topDatasetName = options.getTransformTopDatasetNames().get( i );
-			String botDatasetName = options.getTransformBotDatasetNames().get( i );
+
 			
 			final double[] boundsMin = n5.getAttribute( topDatasetName, "boundsMin", double[].class);
 			final double[] boundsMax = n5.getAttribute( botDatasetName, "boundsMax", double[].class);
@@ -297,18 +285,22 @@ public class KDTreeRenderer<P extends RealLocalizable>
 			
 			final RealTransformSequence transformSequence = new RealTransformSequence();
 			
-			transformSequence.add( scale.inverse() );
-			transformSequence.add( offset );
-			transformSequence.add( transition );
-			transformSequence.add( permuteYZ );
-			
-			final RealTransformRandomAccessible<DoubleType,?> transformedSource = new RealTransformRandomAccessible<>(
+//			transformSequence.add( scale.inverse() );
+//			transformSequence.add( offset );
+//			transformSequence.add( transition );
+//			transformSequence.add( permuteYZ );
+//			
+//			final RealTransformRandomAccessible<DoubleType,?> transformedSource = new RealTransformRandomAccessible<>(
+//					source,
+//					transformSequence );
+
+			final RealRandomAccessible<DoubleType> transformedSource = new RealTransformRandomAccessible<>(
 					source,
 					transformSequence );
-
+			
 			opts = opts.addTo( bdv );
 
-			bdv = BdvFunctions.show( transformedSource, cropInterval, "tbar render", opts );
+			bdv = BdvFunctions.show( transformedSource, itvl, "tbar render", opts );
 //			bdv.getSources().get(0).getSpimSource().getInterpolatedSource( 0, 0, null ).realRandomAccess();
 			bdv.setDisplayRange( 0, 500 );
 

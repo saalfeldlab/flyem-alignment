@@ -138,6 +138,20 @@ public class IncrementalInverter implements RealTransform
 		System.arraycopy( src, 0, guess, 0, src.length );
 		run( src, target, guess );
 	}
+	
+	public void apply( float[] src, float[] target  )
+	{
+		double[] srcd = new double[ src.length ];
+		double[] targetd = new double[ this.numTargetDimensions() ];
+
+		for( int i = 0; i < src.length; i++ )
+			srcd[ i ] = src[ i ];
+		
+		apply( srcd, targetd );
+		
+		for( int i = 0; i < target.length; i++ )
+			target[ i ] = (float)targetd[ i ];
+	} 
 
 	public void run( double[] src, double[] target, double[] guess )
 	{

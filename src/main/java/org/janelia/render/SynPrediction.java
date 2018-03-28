@@ -330,18 +330,22 @@ public class SynPrediction extends AbstractRealType<SynPrediction> implements Se
 				
 				double[] pos = new double[ 3 ];
 				pt.get( i ).localize( pos );
-				for( int j = 0; j < 3; j++ )
-				{
-					long vf = (long) Math.floor( pos[ j ] );
-					long vc = (long) Math.ceil( pos[ j ] );
-
-					if( vf < min[ j ] )
-						min[ j ] = vf;
-
-					if( vc > max[ j ] )
-						max[ j ] = vc;
-				}
 				
+				if( pos[0] < 0.5 && pos[1] < 0.5 && pos[2] < 0.5 )
+				{
+				
+					for( int j = 0; j < 3; j++ )
+					{
+						long vf = (long) Math.floor( pos[ j ] );
+						long vc = (long) Math.ceil( pos[ j ] );
+								
+						if( vf < min[ j ] )
+							min[ j ] = vf;
+	
+						if( vc > max[ j ] )
+							max[ j ] = vc;
+					}
+				}
 				double error = 0;
 				if( errs != null )
 					error = errs.get( i );
