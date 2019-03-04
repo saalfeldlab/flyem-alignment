@@ -1,21 +1,15 @@
 package org.janelia.render;
 
+
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.function.DoubleUnaryOperator;
 
 import javax.imageio.ImageIO;
-import javax.swing.AbstractAction;
-import javax.swing.ActionMap;
-import javax.swing.InputMap;
-import javax.swing.KeyStroke;
 
-import java.awt.Graphics2D;
-import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.image.BufferedImage;
@@ -25,17 +19,13 @@ import org.scijava.ui.behaviour.KeyStrokeAdder.Factory;
 import org.scijava.ui.behaviour.io.InputTriggerConfig;
 import org.scijava.ui.behaviour.util.Actions;
 
-import org.janelia.render.SynPrediction.SynCollection;
-import org.janelia.render.TbarPrediction.TbarCollection;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-import org.janelia.saalfeldlab.n5.imglib2.RandomAccessibleLoader;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
 import org.kohsuke.args4j.Option;
 import org.scijava.ui.behaviour.util.InputActionBindings;
-import org.scijava.ui.behaviour.util.TriggerBehaviourBindings;
 
 import bdv.BigDataViewer;
 import bdv.cache.CacheControl;
@@ -62,36 +52,18 @@ import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
-import net.imglib2.cache.Cache;
-import net.imglib2.cache.img.CachedCellImg;
-import net.imglib2.cache.img.LoadedCellCacheLoader;
-import net.imglib2.cache.ref.SoftRefLoaderCache;
 import net.imglib2.exception.ImgLibException;
-import net.imglib2.img.basictypeaccess.AccessFlags;
-import net.imglib2.img.basictypeaccess.ArrayDataAccessFactory;
-import net.imglib2.img.cell.Cell;
-import net.imglib2.img.cell.CellGrid;
-import net.imglib2.interpolation.Interpolant;
 import net.imglib2.interpolation.neighborsearch.RBFInterpolator;
-import net.imglib2.interpolation.neighborsearch.RBFInterpolator.RBFInterpolatorFactory;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.Scale3D;
 import net.imglib2.type.NativeType;
-import net.imglib2.type.PrimitiveType;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.RealType;
-import net.imglib2.type.numeric.integer.GenericByteType;
-import net.imglib2.type.numeric.integer.GenericIntType;
-import net.imglib2.type.numeric.integer.GenericLongType;
-import net.imglib2.type.numeric.integer.GenericShortType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
-import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.type.volatiles.VolatileUnsignedByteType;
 import net.imglib2.ui.PainterThread;
 import net.imglib2.ui.RenderTarget;
-import net.imglib2.util.Intervals;
 import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.view.Views;
@@ -104,7 +76,7 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 	public static class Options implements Serializable {
 
 		@Option(name = "-s", aliases = {"--synapsePath"}, required = true, usage = "synapse json files, e.g. /nrs/flyem/data/tmp/slab-22.json")
-		private List<String> datasets = new ArrayList<>();
+		private List<String> synapsePaths = new ArrayList<>();
 
 		@Option(name = "-r", aliases = {"--radius"}, required = true, usage = "Radius for synapse point spread function")
 		private double radius;
@@ -113,8 +85,8 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 		private String n5Path = "";
 
 		
-		@Option(name = "-i", aliases = {"--n5Datasets"}, required = false, usage = "N5 image datasets")
-		private List<String> images = new ArrayList<>();
+		@Option(name = "-i", aliases = {"--n5Dataset"}, required = false, usage = "N5 image datasets")
+		private String dataset = "22-34";
 		
 		@Option( name = "--stephan", required = false, usage = "" )
 		private boolean stephan = false;
@@ -136,9 +108,9 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 		/**
 		 * @return the n5 image paths
 		 */
-		public List<String> getImages()
+		public String getDataset()
 		{
-			return images;
+			return dataset;
 		}
 		
 		/**
@@ -154,7 +126,7 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 		 */
 		public List<String> getDatasets() {
 
-			return datasets;
+			return synapsePaths;
 		}
 		
 		/**
@@ -162,7 +134,7 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 		 */
 		public List<String> getSynapsePaths() {
 
-			return datasets;
+			return synapsePaths;
 		}
 
 		/**
@@ -226,14 +198,6 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 
 		return Views.interpolate( tree, interp );
 	}
-
-	public static double rbf( final double rsqr )
-	{
-		if( rsqr > searchDistSqr )
-			return 0;
-		else
-			return 50 *( 1 - ( rsqr * invSquareSearchDistance ));
-	}
 	
 	public static void main( String[] args ) throws ImgLibException, IOException
 	{
@@ -268,76 +232,75 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 			transform = null;  
 		}
 
-		transform = new AffineTransform3D();
+		//transform = new AffineTransform3D();
 		
 		
-		BdvStackSource<VolatileUnsignedByteType> bdv = null;
+		BdvStackSource<?> bdv = null;
 		bdv = loadImages( 
 				options.getN5Path(),
-				options.getImages(),
+				options.getDataset(),
 				transform,
 				new FinalVoxelDimensions("nm", new double[]{8, 8, 8}),
 				true, bdv, 
-				new VolatileUnsignedByteType(),
 				bdvOpts );
 
-//		bdv.getBdvHandle().getViewerPanel().getState().setViewerTransform( xfm );
+		bdv.getBdvHandle().getViewerPanel().getState().setViewerTransform( xfm );
 		
 		
 		
-//		double amount = 20;
-//		//RadiusChange<DoubleType> rc = new RadiusChange<DoubleType>( amount );
-//		RadiusChange<DoubleType> rc = new RadiusChange<DoubleType>();
-//
-//		ARGBType magenta = new ARGBType( ARGBType.rgba(255, 0, 255, 255));
-//
-//		List< String > datasetNames = options.getDatasets();
-//		for (int i = 0; i < datasetNames.size(); ++i)
-//		{
-//			File synapseFile = new File( options.getSynapsePaths().get( i ));
-//
-//			// load synapses
-//			KDTreeRendererRaw<DoubleType,RealPoint> treeRenderer = load( synapseFile.getAbsolutePath() );
-//			Interval itvl = treeRenderer.getInterval();
-//
-//			
-//			// This works
-//			RealRandomAccessible<DoubleType> source = treeRenderer.getRealRandomAccessible(options.getRadius(), KDTreeRendererRaw::rbf );
-//
-////			This doesn't work
-//			//RBFInterpolator<DoubleType> interp = treeRenderer.getInterp( options.getRadius(), KDTreeRendererRaw::rbf );
-//			//rc.add( interp );
-////			RealRandomAccessible< DoubleType > source = new FixedInterpolant<DoubleType>( interp );
-//
-//			
-//			//RBFRealRandomAccessible<DoubleType> source = new RBFRealRandomAccessible<>( treeRenderer, options.getRadius(), amount );
-////			rc.add( source );
-//
+		double amount = 20;
+		//RadiusChange<DoubleType> rc = new RadiusChange<DoubleType>( amount );
+		RadiusChange<DoubleType> rc = new RadiusChange<DoubleType>();
+
+		ARGBType magenta = new ARGBType( ARGBType.rgba(255, 0, 255, 255));
+
+		List< String > datasetNames = options.getDatasets();
+		for (int i = 0; i < datasetNames.size(); ++i)
+		{
+			File synapseFile = new File( options.getSynapsePaths().get( i ));
+
+			// load synapses
+			KDTreeRendererRaw<DoubleType,RealPoint> treeRenderer = KDTreeRendererRaw.load( synapseFile.getAbsolutePath() );
+			Interval itvl = treeRenderer.getInterval();
+
+			
+			// This works
+			RealRandomAccessible<DoubleType> source = treeRenderer.getRealRandomAccessible(options.getRadius(), KDTreeRendererRaw::rbf );
+
+//			This doesn't work
+			//RBFInterpolator<DoubleType> interp = treeRenderer.getInterp( options.getRadius(), KDTreeRendererRaw::rbf );
+			//rc.add( interp );
+//			RealRandomAccessible< DoubleType > source = new FixedInterpolant<DoubleType>( interp );
+
+			
+			//RBFRealRandomAccessible<DoubleType> source = new RBFRealRandomAccessible<>( treeRenderer, options.getRadius(), amount );
+//			rc.add( source );
+
+			bdvOpts = bdvOpts.addTo( bdv );
+
+			bdv = BdvFunctions.show( source, itvl, "tbar render", bdvOpts );
+//			bdv.getSources().get(0).getSpimSource().getInterpolatedSource( 0, 0, null ).realRandomAccess();
+			bdv.setDisplayRange( 0, 800 );
+			//bdv.setColor(magenta);
+			
+			
+//			RealRandomAccessible<DoubleType> sourceSmall = treeRenderer.getRealRandomAccessible( 25, KDTreeRendererRaw::rbf );
 //			bdvOpts = bdvOpts.addTo( bdv );
 //
-//			bdv = BdvFunctions.show( source, itvl, "tbar render", bdvOpts );
-////			bdv.getSources().get(0).getSpimSource().getInterpolatedSource( 0, 0, null ).realRandomAccess();
-//			bdv.setDisplayRange( 0, 800 );
-//			//bdv.setColor(magenta);
-//			
-//			
-////			RealRandomAccessible<DoubleType> sourceSmall = treeRenderer.getRealRandomAccessible( 25, KDTreeRendererRaw::rbf );
-////			bdvOpts = bdvOpts.addTo( bdv );
-////
-////			bdv = BdvFunctions.show( sourceSmall, itvl, "tbar small render", bdvOpts );
-////			bdv.setDisplayRange( 0, 150 );
-////			bdv.setColor(magenta);
-//		}
-//
-////		RadiusKeyListener rkl = new RadiusKeyListener();
-//
-//		
-//		InputTriggerConfig trigConfig = bdv.getBdvHandle().getViewerPanel().getOptionValues().getInputTriggerConfig();
-//		if( trigConfig == null )
-//			trigConfig = new InputTriggerConfig();
-//		
-//		RKActions.installActionBindings( bdv.getBdvHandle().getKeybindings(), bdv.getBdvHandle().getViewerPanel(), 
-//				rc, trigConfig );
+//			bdv = BdvFunctions.show( sourceSmall, itvl, "tbar small render", bdvOpts );
+//			bdv.setDisplayRange( 0, 150 );
+//			bdv.setColor(magenta);
+		}
+
+//		RadiusKeyListener rkl = new RadiusKeyListener();
+
+		
+		InputTriggerConfig trigConfig = bdv.getBdvHandle().getViewerPanel().getOptionValues().getInputTriggerConfig();
+		if( trigConfig == null )
+			trigConfig = new InputTriggerConfig();
+		
+		RKActions.installActionBindings( bdv.getBdvHandle().getKeybindings(), bdv.getBdvHandle().getViewerPanel(), 
+				rc, trigConfig );
 
 		
 
@@ -476,7 +439,6 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 		}
 		
 	}
-	
 
 	public static class RBFRealRandomAccessible<T extends RealType<T>> implements RealRandomAccessible<T>
 	{
@@ -492,7 +454,7 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 			this.kdtr = kdtr;
 			this.interpFactory = 
 					new RBFInterpolator.RBFInterpolatorFactory< T >( 
-							KDTreeRendererRaw_new::rbf, startingRad, false,
+							KDTreeRendererRaw::rbf, startingRad, false,
 							kdtr.tree.firstElement().copy() );
 			interp = interpFactory.create( kdtr.tree );
 		}
@@ -552,45 +514,6 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 		}
 	}
 	
-	private static class RadiusChangeInterp<T extends RealType<T>>
-	{
-//		private static final long serialVersionUID = 4552199070684569689L;
-
-		private final ArrayList<RBFInterpolator<T>> interpList;
-		private final double amount;
-		public RadiusChangeInterp( double amount )
-		{
-			this.amount = amount;
-			interpList = new ArrayList<RBFInterpolator<T>>();
-		}
-
-		public void add( RBFInterpolator<T> interp )
-		{
-			interpList.add( interp );
-		}
-		
-		public void increase()
-		{
-			System.out.println( "increase" );
-			for( RBFInterpolator<T> interp : interpList )
-				interp.increaseRadius( amount );
-		}
-
-		public void decrease()
-		{
-			System.out.println( "decrease" );
-			for( RBFInterpolator<T> interp : interpList )
-				interp.decreaseRadius( amount );
-		}
-
-//		@Override
-//		public void actionPerformed( ActionEvent arg0 )
-//		{
-//			System.out.println("action");
-//			for( RBFInterpolator<T> interp : interpList )
-//				interp.setRadius( 100 );
-//		}
-	}
 	
 	private static class RadiusChange<T extends RealType<T>>
 	{
@@ -630,19 +553,19 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 //		}
 	}
 
-	public static <T extends RealType<T> & NativeType<T>> BdvStackSource<T> loadImages( 
+	public static <T extends NativeType<T> & RealType<T>> BdvStackSource<?> loadImages( 
 			String n5Path,
-			List<String> images,
+			String images,
 			AffineTransform3D transform,
 			VoxelDimensions voxelDimensions,
 			boolean useVolatile,
-			BdvStackSource<T> bdv,
-			T t, 
+			BdvStackSource<?> bdv,
 			BdvOptions opts ) throws IOException
 	{
-		N5FSReader n5 = new N5FSReader("/nrs/flyem/data/tmp/Z0115-22.export.n5");
-		Pair<RandomAccessibleInterval<T>[], double[][]> mipmaps = N5Utils.openMipmaps(n5, "22-34", useVolatile);
-		
+		N5FSReader n5 = new N5FSReader( n5Path );
+		Pair<RandomAccessibleInterval<T>[], double[][]> mipmaps = N5Utils.openMipmaps(n5, images, useVolatile);
+		T t = Util.getTypeFromInterval( mipmaps.getA()[0] );
+
 		
 		final RandomAccessibleIntervalMipmapSource<T> mipmapSource =
 				new RandomAccessibleIntervalMipmapSource<T>(
@@ -705,7 +628,7 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 				final Scale3D scale3D = new Scale3D(inverseScale, inverseScale, inverseScale);
 				transformSequence.add(scale3D);
 
-				final RandomAccessibleInterval<UnsignedByteType> cachedSource = wrapAsVolatileCachedCellImg(source, new int[]{64, 64, 64});
+				final RandomAccessibleInterval<UnsignedByteType> cachedSource = KDTreeRendererRaw.wrapAsVolatileCachedCellImg(source, new int[]{64, 64, 64});
 
 				mipmaps[s] = cachedSource;
 				scales[s] = new double[]{scale, scale, scale};
@@ -737,89 +660,6 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 			bdv = mipmapSource( source2render, bdv, opts );
 		}
 		return bdv;
-	}
-
-	public static KDTreeRendererRaw_new<DoubleType,RealPoint> load( String synapseFilePath )
-	{
-		System.out.println( synapseFilePath );
-
-		boolean success = false;
-		KDTreeRendererRaw_new<DoubleType,RealPoint> treeRenderer = null;
-		Interval itvl;
-		try
-		{
-			SynCollection<DoubleType> synapses = SynPrediction.loadAll( synapseFilePath, new DoubleType() );
-			itvl = new FinalInterval( synapses.min, synapses.max );
-			System.out.println( synapses );
-			treeRenderer = new KDTreeRendererRaw_new<DoubleType,RealPoint>( synapses.getValues( 0 ), synapses.getPoints() );
-			treeRenderer.setInterval( itvl );
-			success = true;
-		}
-		catch( Exception e )
-		{
-			System.out.println( "Not a new synapse json" );
-			e.printStackTrace();
-		}
-		
-		if( success )
-			return treeRenderer;
-		
-		try
-		{
-			TbarCollection<DoubleType> tbars = TbarPrediction.loadAll( synapseFilePath, new DoubleType() );
-			itvl = new FinalInterval( tbars.min, tbars.max );
-			System.out.println( tbars );
-			treeRenderer = new KDTreeRendererRaw_new<DoubleType,RealPoint>( tbars.getValues( 0 ), tbars.getPoints() );
-			treeRenderer.setInterval( itvl );
-			success = true;
-		}
-		catch( Exception e )
-		{
-			System.out.println( "Not an old synapse json" );
-			e.printStackTrace();
-		}
-		
-		if( !success )
-			System.err.println( "Could not read synapses/tbars - returning null" );
-		
-		return treeRenderer;
-	}
-
-	@SuppressWarnings( { "unchecked", "rawtypes" } )
-	public static final <T extends NativeType<T>> RandomAccessibleInterval<T> wrapAsVolatileCachedCellImg(
-			final RandomAccessibleInterval<T> source,
-			final int[] blockSize) throws IOException {
-
-		final long[] dimensions = Intervals.dimensionsAsLongArray(source);
-		final CellGrid grid = new CellGrid(dimensions, blockSize);
-
-		final RandomAccessibleLoader<T> loader = new RandomAccessibleLoader<T>(Views.zeroMin(source));
-
-		final T type = Util.getTypeFromInterval(source);
-		final Set<AccessFlags> accessFlags = AccessFlags.setOf(AccessFlags.VOLATILE );
-
-		final CachedCellImg<T, ?> img;
-		final Cache<Long, Cell<?>> cache =
-				new SoftRefLoaderCache().withLoader(LoadedCellCacheLoader.get(grid, loader, type, accessFlags));
-		
-
-		if (GenericByteType.class.isInstance(type)) {
-			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(PrimitiveType.BYTE, accessFlags));
-		} else if (GenericShortType.class.isInstance(type)) {
-			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(PrimitiveType.SHORT, accessFlags));
-		} else if (GenericIntType.class.isInstance(type)) {
-			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(PrimitiveType.INT, accessFlags));
-		} else if (GenericLongType.class.isInstance(type)) {
-			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(PrimitiveType.LONG, accessFlags));
-		} else if (FloatType.class.isInstance(type)) {
-			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(PrimitiveType.FLOAT, accessFlags));
-		} else if (DoubleType.class.isInstance(type)) {
-			img = new CachedCellImg(grid, type, cache, ArrayDataAccessFactory.get(PrimitiveType.DOUBLE, accessFlags));
-		} else {
-			img = null;
-		}
-
-		return img;
 	}
 	
 	/**

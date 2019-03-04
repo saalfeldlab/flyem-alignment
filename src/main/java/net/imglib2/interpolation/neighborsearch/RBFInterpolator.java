@@ -6,11 +6,13 @@ import net.imglib2.KDTree;
 import net.imglib2.RealInterval;
 import net.imglib2.RealPoint;
 import net.imglib2.RealRandomAccess;
+import net.imglib2.RealRandomAccessible;
 import net.imglib2.Sampler;
 import net.imglib2.interpolation.InterpolatorFactory;
 import net.imglib2.neighborsearch.RadiusNeighborSearch;
 import net.imglib2.neighborsearch.RadiusNeighborSearchOnKDTree;
 import net.imglib2.type.numeric.RealType;
+import net.imglib2.view.Views;
 
 /**
  * A radial basis function interpolator
@@ -28,11 +30,14 @@ public class RBFInterpolator<T extends RealType<T>> extends RealPoint implements
 
 	final T value;
 	
-	final double searchRadius;
+	double searchRadius;
 
 	final DoubleUnaryOperator rbf;  // from squaredDistance to weight
 	
 	final boolean normalize;
+	
+	// need to know the min/maxes of the block that the synapses came from
+
 
 	public RBFInterpolator(
 			final KDTree< T > tree, 
@@ -51,12 +56,30 @@ public class RBFInterpolator<T extends RealType<T>> extends RealPoint implements
 
 		this.value = t.copy();
 	}
+	
+	public void setRadius( final double radius )
+	{
+		this.searchRadius = radius;
+	}
+
+	public void increaseRadius( final double amount )
+	{
+		this.searchRadius += amount;
+	}
+
+	public void decreaseRadius( final double amount )
+	{
+		this.searchRadius -= amount;
+	}
 
 	@Override
 	public T get()
 	{
 		search.search( this, searchRadius, false );
 
+		
+		// look if *this* position is within min/max interval of some hemi-brain block
+		
 		if ( search.numNeighbors() == 0 )
 			value.setZero();
 		else
@@ -101,6 +124,7 @@ public class RBFInterpolator<T extends RealType<T>> extends RealPoint implements
 	{
 		return copy();
 	}
+	
 
 	public static class RBFInterpolatorFactory<T extends RealType<T>> implements InterpolatorFactory< T, KDTree< T > >
 	{
