@@ -88,14 +88,16 @@ import net.imglib2.type.numeric.integer.GenericShortType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.type.volatiles.VolatileUnsignedByteType;
 import net.imglib2.ui.PainterThread;
 import net.imglib2.ui.RenderTarget;
 import net.imglib2.util.Intervals;
+import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.view.Views;
 
 
-public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable>
+public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizable>
 {
 
 	@SuppressWarnings("serial")
@@ -109,6 +111,7 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable>
 
 		@Option(name = "-p", aliases = {"--n5Path"}, required = false, usage = "N5 path")
 		private String n5Path = "";
+
 		
 		@Option(name = "-i", aliases = {"--n5Datasets"}, required = false, usage = "N5 image datasets")
 		private List<String> images = new ArrayList<>();
@@ -183,7 +186,7 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable>
 	final KDTree< T > tree;
 	Interval itvl;
 
-	public KDTreeRendererRaw( List<T> vals, List<P> pts )
+	public KDTreeRendererRaw_new( List<T> vals, List<P> pts )
 	{
 		tree = new KDTree< T >( vals, pts );
 	}
@@ -264,74 +267,77 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable>
 			// so prefer that over applying the identity
 			transform = null;  
 		}
+
+		transform = new AffineTransform3D();
 		
 		
-		BdvStackSource<?> bdv = null;
+		BdvStackSource<VolatileUnsignedByteType> bdv = null;
 		bdv = loadImages( 
 				options.getN5Path(),
 				options.getImages(),
 				transform,
 				new FinalVoxelDimensions("nm", new double[]{8, 8, 8}),
-				true, bdv, bdvOpts );
+				true, bdv, 
+				new VolatileUnsignedByteType(),
+				bdvOpts );
 
-		bdv.getBdvHandle().getViewerPanel().getState().setViewerTransform( xfm );
+//		bdv.getBdvHandle().getViewerPanel().getState().setViewerTransform( xfm );
 		
-		double amount = 20;
-		//RadiusChange<DoubleType> rc = new RadiusChange<DoubleType>( amount );
-		RadiusChange<DoubleType> rc = new RadiusChange<DoubleType>();
-
-		ARGBType magenta = new ARGBType( ARGBType.rgba(255, 0, 255, 255));
-
-		List< String > datasetNames = options.getDatasets();
-		for (int i = 0; i < datasetNames.size(); ++i)
-		{
-			File synapseFile = new File( options.getSynapsePaths().get( i ));
-
-			// load synapses
-			KDTreeRendererRaw<DoubleType,RealPoint> treeRenderer = load( synapseFile.getAbsolutePath() );
-			Interval itvl = treeRenderer.getInterval();
-
-			
-			// This works
-			RealRandomAccessible<DoubleType> source = treeRenderer.getRealRandomAccessible(options.getRadius(), KDTreeRendererRaw::rbf );
-
-//			This doesn't work
-			//RBFInterpolator<DoubleType> interp = treeRenderer.getInterp( options.getRadius(), KDTreeRendererRaw::rbf );
-			//rc.add( interp );
-//			RealRandomAccessible< DoubleType > source = new FixedInterpolant<DoubleType>( interp );
-
-			
-			//RBFRealRandomAccessible<DoubleType> source = new RBFRealRandomAccessible<>( treeRenderer, options.getRadius(), amount );
-//			rc.add( source );
-
-			bdvOpts = bdvOpts.addTo( bdv );
-
-			bdv = BdvFunctions.show( source, itvl, "tbar render", bdvOpts );
-//			bdv.getSources().get(0).getSpimSource().getInterpolatedSource( 0, 0, null ).realRandomAccess();
-			bdv.setDisplayRange( 0, 800 );
-			//bdv.setColor(magenta);
-			
-			
-//			RealRandomAccessible<DoubleType> sourceSmall = treeRenderer.getRealRandomAccessible( 25, KDTreeRendererRaw::rbf );
+		
+		
+//		double amount = 20;
+//		//RadiusChange<DoubleType> rc = new RadiusChange<DoubleType>( amount );
+//		RadiusChange<DoubleType> rc = new RadiusChange<DoubleType>();
+//
+//		ARGBType magenta = new ARGBType( ARGBType.rgba(255, 0, 255, 255));
+//
+//		List< String > datasetNames = options.getDatasets();
+//		for (int i = 0; i < datasetNames.size(); ++i)
+//		{
+//			File synapseFile = new File( options.getSynapsePaths().get( i ));
+//
+//			// load synapses
+//			KDTreeRendererRaw<DoubleType,RealPoint> treeRenderer = load( synapseFile.getAbsolutePath() );
+//			Interval itvl = treeRenderer.getInterval();
+//
+//			
+//			// This works
+//			RealRandomAccessible<DoubleType> source = treeRenderer.getRealRandomAccessible(options.getRadius(), KDTreeRendererRaw::rbf );
+//
+////			This doesn't work
+//			//RBFInterpolator<DoubleType> interp = treeRenderer.getInterp( options.getRadius(), KDTreeRendererRaw::rbf );
+//			//rc.add( interp );
+////			RealRandomAccessible< DoubleType > source = new FixedInterpolant<DoubleType>( interp );
+//
+//			
+//			//RBFRealRandomAccessible<DoubleType> source = new RBFRealRandomAccessible<>( treeRenderer, options.getRadius(), amount );
+////			rc.add( source );
+//
 //			bdvOpts = bdvOpts.addTo( bdv );
 //
-//			bdv = BdvFunctions.show( sourceSmall, itvl, "tbar small render", bdvOpts );
-//			bdv.setDisplayRange( 0, 150 );
-//			bdv.setColor(magenta);
-		}
-
-//		RadiusKeyListener rkl = new RadiusKeyListener();
-
-		
-		InputTriggerConfig trigConfig = bdv.getBdvHandle().getViewerPanel().getOptionValues().getInputTriggerConfig();
-		if( trigConfig == null )
-			trigConfig = new InputTriggerConfig();
-		
-		RKActions.installActionBindings( bdv.getBdvHandle().getKeybindings(), bdv.getBdvHandle().getViewerPanel(), 
-				rc, trigConfig );
-
-		
-		
+//			bdv = BdvFunctions.show( source, itvl, "tbar render", bdvOpts );
+////			bdv.getSources().get(0).getSpimSource().getInterpolatedSource( 0, 0, null ).realRandomAccess();
+//			bdv.setDisplayRange( 0, 800 );
+//			//bdv.setColor(magenta);
+//			
+//			
+////			RealRandomAccessible<DoubleType> sourceSmall = treeRenderer.getRealRandomAccessible( 25, KDTreeRendererRaw::rbf );
+////			bdvOpts = bdvOpts.addTo( bdv );
+////
+////			bdv = BdvFunctions.show( sourceSmall, itvl, "tbar small render", bdvOpts );
+////			bdv.setDisplayRange( 0, 150 );
+////			bdv.setColor(magenta);
+//		}
+//
+////		RadiusKeyListener rkl = new RadiusKeyListener();
+//
+//		
+//		InputTriggerConfig trigConfig = bdv.getBdvHandle().getViewerPanel().getOptionValues().getInputTriggerConfig();
+//		if( trigConfig == null )
+//			trigConfig = new InputTriggerConfig();
+//		
+//		RKActions.installActionBindings( bdv.getBdvHandle().getKeybindings(), bdv.getBdvHandle().getViewerPanel(), 
+//				rc, trigConfig );
 
 		
 
@@ -476,9 +482,9 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable>
 	{
 		final RBFInterpolator.RBFInterpolatorFactory<T> interpFactory;
 		final RBFInterpolator<T> interp;
-		final KDTreeRendererRaw<T,?> kdtr;
+		final KDTreeRendererRaw_new<T,?> kdtr;
 		final double amount;
-		public RBFRealRandomAccessible( KDTreeRendererRaw<T,?> kdtr, 
+		public RBFRealRandomAccessible( KDTreeRendererRaw_new<T,?> kdtr, 
 				double startingRad,
 				double amount )
 		{
@@ -486,7 +492,7 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable>
 			this.kdtr = kdtr;
 			this.interpFactory = 
 					new RBFInterpolator.RBFInterpolatorFactory< T >( 
-							KDTreeRendererRaw::rbf, startingRad, false,
+							KDTreeRendererRaw_new::rbf, startingRad, false,
 							kdtr.tree.firstElement().copy() );
 			interp = interpFactory.create( kdtr.tree );
 		}
@@ -623,14 +629,49 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable>
 //				interp.setRadius( 100 );
 //		}
 	}
-	
-	public static BdvStackSource<?> loadImages( 
+
+	public static <T extends RealType<T> & NativeType<T>> BdvStackSource<T> loadImages( 
 			String n5Path,
 			List<String> images,
 			AffineTransform3D transform,
 			VoxelDimensions voxelDimensions,
 			boolean useVolatile,
-			BdvStackSource<?> bdv,
+			BdvStackSource<T> bdv,
+			T t, 
+			BdvOptions opts ) throws IOException
+	{
+		N5FSReader n5 = new N5FSReader("/nrs/flyem/data/tmp/Z0115-22.export.n5");
+		Pair<RandomAccessibleInterval<T>[], double[][]> mipmaps = N5Utils.openMipmaps(n5, "22-34", useVolatile);
+		
+		
+		final RandomAccessibleIntervalMipmapSource<T> mipmapSource =
+				new RandomAccessibleIntervalMipmapSource<T>(
+						mipmaps.getA(),
+						t,
+						mipmaps.getB(),
+						voxelDimensions,
+						"hemibrain");
+
+		Source<T> source2render = mipmapSource;
+		if( transform != null  )
+		{
+			System.out.println("FlyEM space");
+			TransformedSource<T> transformedSource = new TransformedSource<>(mipmapSource);
+			transformedSource.setFixedTransform( transform );
+			source2render = transformedSource;
+		}
+
+		bdv = mipmapSource( source2render, bdv, opts );
+		return bdv;
+	}
+	
+	public static <T extends RealType<T> & NativeType<T>> BdvStackSource<T> loadImagesOld( 
+			String n5Path,
+			List<String> images,
+			AffineTransform3D transform,
+			VoxelDimensions voxelDimensions,
+			boolean useVolatile,
+			BdvStackSource<T> bdv,
 			BdvOptions opts ) throws IOException
 	{
 		if( n5Path == null || n5Path.isEmpty() || images.size() < 1 )
@@ -670,7 +711,7 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable>
 				scales[s] = new double[]{scale, scale, scale};
 			}
 
-			final RandomAccessibleIntervalMipmapSource<?> mipmapSource =
+			final RandomAccessibleIntervalMipmapSource<UnsignedByteType> mipmapSource =
 					new RandomAccessibleIntervalMipmapSource<>(
 							mipmaps,
 							new UnsignedByteType(),
@@ -678,17 +719,17 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable>
 							voxelDimensions,
 							datasetName);
 
-			final Source<?> volatileMipmapSource;
+			final Source<T> volatileMipmapSource;
 			if (useVolatile)
-				volatileMipmapSource = mipmapSource.asVolatile(queue);
+				volatileMipmapSource = (Source<T>)mipmapSource.asVolatile(queue);
 			else
-				volatileMipmapSource = mipmapSource;
+				volatileMipmapSource = (Source<T>)mipmapSource;
 			
-			Source<?> source2render = volatileMipmapSource;
+			Source<T> source2render = volatileMipmapSource;
 			if( transform != null  )
 			{
 				System.out.println("FlyEM space");
-				TransformedSource<?> transformedSource = new TransformedSource<>(volatileMipmapSource);
+				TransformedSource<T> transformedSource = new TransformedSource<>( volatileMipmapSource );
 				transformedSource.setFixedTransform( transform );
 				source2render = transformedSource;
 			}
@@ -698,19 +739,19 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable>
 		return bdv;
 	}
 
-	public static KDTreeRendererRaw<DoubleType,RealPoint> load( String synapseFilePath )
+	public static KDTreeRendererRaw_new<DoubleType,RealPoint> load( String synapseFilePath )
 	{
 		System.out.println( synapseFilePath );
 
 		boolean success = false;
-		KDTreeRendererRaw<DoubleType,RealPoint> treeRenderer = null;
+		KDTreeRendererRaw_new<DoubleType,RealPoint> treeRenderer = null;
 		Interval itvl;
 		try
 		{
 			SynCollection<DoubleType> synapses = SynPrediction.loadAll( synapseFilePath, new DoubleType() );
 			itvl = new FinalInterval( synapses.min, synapses.max );
 			System.out.println( synapses );
-			treeRenderer = new KDTreeRendererRaw<DoubleType,RealPoint>( synapses.getValues( 0 ), synapses.getPoints() );
+			treeRenderer = new KDTreeRendererRaw_new<DoubleType,RealPoint>( synapses.getValues( 0 ), synapses.getPoints() );
 			treeRenderer.setInterval( itvl );
 			success = true;
 		}
@@ -728,7 +769,7 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable>
 			TbarCollection<DoubleType> tbars = TbarPrediction.loadAll( synapseFilePath, new DoubleType() );
 			itvl = new FinalInterval( tbars.min, tbars.max );
 			System.out.println( tbars );
-			treeRenderer = new KDTreeRendererRaw<DoubleType,RealPoint>( tbars.getValues( 0 ), tbars.getPoints() );
+			treeRenderer = new KDTreeRendererRaw_new<DoubleType,RealPoint>( tbars.getValues( 0 ), tbars.getPoints() );
 			treeRenderer.setInterval( itvl );
 			success = true;
 		}
@@ -786,8 +827,8 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable>
 	 * list of target to source transforms.
 	 * @throws IOException
 	 */
-	public static BdvStackSource<?> mipmapSource(
-			final Source<?> source,
+	public static <T extends RealType<T> & NativeType<T>> BdvStackSource<T> mipmapSource(
+			final Source<T> source,
 			final Bdv bdv) throws IOException {
 
 		return mipmapSource(source, bdv, null);
@@ -798,8 +839,8 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable>
 	 * list of target to source transforms.
 	 * @throws IOException
 	 */
-	public static BdvStackSource<?> mipmapSource(
-			final Source<?> source,
+	public static <T extends RealType<T> & NativeType<T>> BdvStackSource<T> mipmapSource(
+			final Source<T> source,
 			final Bdv bdv,
 			BdvOptions options) throws IOException {
 
@@ -810,7 +851,7 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable>
 			System.out.println("add to");
 			options = options.addTo( bdv );
 		}	
-		final BdvStackSource<?> stackSource = BdvFunctions.show(source, options);
+		final BdvStackSource<T> stackSource = BdvFunctions.show(source, options);
 		stackSource.setDisplayRange(0, 255);
 		return stackSource;
 	}

@@ -201,7 +201,7 @@ public class PosFieldTransformInverseGradientDescent implements RealTransform
 	@Override
 	public RealTransform copy()
 	{
-		return new  PosFieldTransformInverseGradientDescent( ndims, xfm );
+		return new PosFieldTransformInverseGradientDescent( ndims, xfm );
 	}
 	
 	public void setGuess( final double[] guess )
