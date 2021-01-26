@@ -1,6 +1,5 @@
 package org.janelia.render;
 
-
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.Serializable;
@@ -15,7 +14,6 @@ import java.awt.event.KeyListener;
 
 import org.scijava.ui.behaviour.KeyStrokeAdder;
 import org.scijava.ui.behaviour.KeyStrokeAdder.Factory;
-import org.scijava.ui.behaviour.io.InputTriggerConfig;
 import org.scijava.ui.behaviour.util.Actions;
 import org.kohsuke.args4j.CmdLineException;
 import org.kohsuke.args4j.CmdLineParser;
@@ -24,44 +22,34 @@ import org.scijava.ui.behaviour.util.InputActionBindings;
 
 import com.opencsv.CSVReader;
 
-import bdv.cache.CacheControl;
-import bdv.tools.transformation.TransformedSource;
-import bdv.util.Bdv;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
-import bdv.util.Prefs;
-import bdv.util.RandomAccessibleIntervalMipmapSource;
-import bdv.util.volatiles.SharedQueue;
-import bdv.viewer.Source;
 import bdv.viewer.ViewerPanel;
-import bdv.viewer.render.MultiResolutionRenderer;
-import bdv.viewer.state.ViewerState;
-import mpicbg.spim.data.sequence.FinalVoxelDimensions;
-import mpicbg.spim.data.sequence.VoxelDimensions;
+import ij.IJ;
+import ij.ImagePlus;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.KDTree;
-import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.exception.ImgLibException;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.neighborsearch.RBFInterpolator;
+import net.imglib2.realtransform.AffineGet;
 import net.imglib2.realtransform.AffineTransform3D;
-import net.imglib2.realtransform.RealTransformSequence;
+import net.imglib2.realtransform.RealTransform;
+import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Scale3D;
-import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.RealType;
-import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
-import net.imglib2.ui.PainterThread;
-import net.imglib2.ui.RenderTarget;
 import net.imglib2.util.Pair;
-import net.imglib2.util.Util;
+import net.imglib2.util.ValuePair;
+import net.imglib2.view.IntervalView;
 import net.imglib2.view.Views;
 
 
@@ -72,7 +60,7 @@ public class KDTreeRendererVNC<T extends RealType<T>,P extends RealLocalizable>
 	public static class Options implements Serializable {
 
 		@Option(name = "-s", aliases = {"--synapsePath"}, required = true, usage = "synapse json files, e.g. /nrs/flyem/data/tmp/slab-22.json")
-		private List<String> synapsePaths = new ArrayList<>();
+		private String synapsePaths;
 
 		@Option(name = "-r", aliases = {"--radius"}, required = false, usage = "Radius for synapse point spread function")
 		private double radius = 20;
@@ -82,6 +70,15 @@ public class KDTreeRendererVNC<T extends RealType<T>,P extends RealLocalizable>
 		
 		@Option(name = "-i", aliases = {"--n5Dataset"}, required = false, usage = "N5 image datasets")
 		private String dataset = "22-34";
+
+		@Option(name = "-o", aliases = {"--output"}, required = false, usage = "")
+		private String output;
+
+		@Option(name = "-e", aliases = {"--resolution"}, required = false, usage = "Output resolution")
+		private String resolutionArg;
+
+		@Option(name = "-f", aliases = {"--subsample-pts"}, required = false, usage = "Subsampling factor for points")
+		private int subFactor = 1;
 		
 		private boolean parsedSuccessfully;
 
@@ -116,7 +113,7 @@ public class KDTreeRendererVNC<T extends RealType<T>,P extends RealLocalizable>
 		/**
 		 * @return the datasets
 		 */
-		public List<String> getDatasets() {
+		public String getDatasets() {
 
 			return synapsePaths;
 		}
@@ -124,7 +121,7 @@ public class KDTreeRendererVNC<T extends RealType<T>,P extends RealLocalizable>
 		/**
 		 * @return the synapse file paths
 		 */
-		public List<String> getSynapsePaths() {
+		public String getSynapsePaths() {
 
 			return synapsePaths;
 		}
@@ -186,69 +183,79 @@ public class KDTreeRendererVNC<T extends RealType<T>,P extends RealLocalizable>
 		return Views.interpolate( tree, interp );
 	}
 	
+	
+	@SuppressWarnings( "unchecked" )
+	public static Pair< RealRandomAccessible< DoubleType >, Interval > load( final Options options )
+	{
+		final String datasetNames = options.getDatasets();
+		final int subFactor = options.subFactor;
+
+		// load synapses
+		KDTreeRendererRaw< DoubleType, RealPoint > treeRenderer = KDTreeRendererVNC.load( options.getSynapsePaths(), null, subFactor );
+		Interval itvl = treeRenderer.getInterval();
+
+		// This works
+		RealRandomAccessible< DoubleType > source = treeRenderer.getRealRandomAccessible( options.getRadius(), KDTreeRendererRaw::rbf );
+		return new ValuePair( source, itvl );
+	}
+
+	public static BdvStackSource< DoubleType > view( final RealRandomAccessible< DoubleType > source, final Interval itvl, final BdvOptions bdvOpts )
+	{
+
+		BdvStackSource< DoubleType > bdv = BdvFunctions.show( source, itvl, "tbar render", bdvOpts );
+		bdv.setDisplayRange( 0, 800 );
+		return bdv;
+	}
+
 	public static void main( String[] args ) throws ImgLibException, IOException
 	{
-		
 		BdvOptions bdvOpts = BdvOptions.options().numRenderingThreads( 2 )
 				.preferredSize( 1280, 1024 );
 
 		final Options options = new Options(args);
 
-
-		AffineTransform3D transform = new AffineTransform3D();
-
-//		BdvStackSource<?> bdv = null;
-//		bdv = loadImages( 
-//				options.getN5Path(),
-//				options.getDataset(),
-//				transform,
-//				new FinalVoxelDimensions("nm", new double[]{8, 8, 8}),
-//				true, bdv, 
-//				bdvOpts );
-//
-//		bdv.getBdvHandle().getViewerPanel().getState().setViewerTransform( xfm );
-//		
-//		
-//		
 		double amount = 20;
 		//RadiusChange<DoubleType> rc = new RadiusChange<DoubleType>( amount );
 		RadiusChange<DoubleType> rc = new RadiusChange<DoubleType>();
 
-		ARGBType magenta = new ARGBType( ARGBType.rgba(255, 0, 255, 255));
+		Pair< RealRandomAccessible< DoubleType >, Interval > sourceItvl = load( options );
 
-		List< String > datasetNames = options.getDatasets();
-		BdvStackSource< DoubleType > bdv = null;
-		for (int i = 0; i < datasetNames.size(); ++i)
+		if( options.output == null )
 		{
-
-			// load synapses
-			KDTreeRendererRaw<DoubleType,RealPoint> treeRenderer = KDTreeRendererVNC.load( options.getSynapsePaths().get( i ), null );
-			Interval itvl = treeRenderer.getInterval();
-
-			
-			// This works
-			RealRandomAccessible<DoubleType> source = treeRenderer.getRealRandomAccessible(options.getRadius(), KDTreeRendererRaw::rbf );
-
-			//RBFRealRandomAccessible<DoubleType> source = new RBFRealRandomAccessible<>( treeRenderer, options.getRadius(), amount );
-//			rc.add( source );
-
-
-			bdv = BdvFunctions.show( source, itvl, "tbar render", bdvOpts );
-			bdv.setDisplayRange( 0, 800 );
-			
-			
-//			RealRandomAccessible<DoubleType> sourceSmall = treeRenderer.getRealRandomAccessible( 25, KDTreeRendererRaw::rbf );
-//			bdvOpts = bdvOpts.addTo( bdv );
-//
-//			bdv = BdvFunctions.show( sourceSmall, itvl, "tbar small render", bdvOpts );
-//			bdv.setDisplayRange( 0, 150 );
-//			bdv.setColor(magenta);
+			view( sourceItvl.getA(), sourceItvl.getB(), bdvOpts );
 		}
+		else
+		{
+			final double[] resolution = Arrays.stream( options.resolutionArg.split( "," ) ).mapToDouble( Double::parseDouble ).toArray();
 
-//		RadiusKeyListener rkl = new RadiusKeyListener();
+			// microns
+			Scale3D physicalSpacing = new Scale3D( 0.008, 0.008, 0.008 );
+			Scale3D outputSpacing = new Scale3D( resolution );
 
-		
+			Scale3D renderXfm = physicalSpacing.copy();
+			renderXfm.preConcatenate( outputSpacing.inverse() );
 
+			FinalInterval emInterval = new FinalInterval( 46113, 59467, 82276 );
+
+			final FinalInterval renderInterval = transformRealInterval( renderXfm, emInterval );
+			System.out.println( "render Interval: " + renderInterval );
+
+			IntervalView< DoubleType > img = Views.interval( 
+					Views.raster( RealViews.affine( sourceItvl.getA(), renderXfm ) ),
+					renderInterval );
+
+//			BdvFunctions.show( img, "render Img" );
+
+			ImagePlus imp = ImageJFunctions.wrap( img, "rendered" );
+			imp.getCalibration().pixelWidth = resolution[ 0 ];
+			imp.getCalibration().pixelHeight = resolution[ 1 ];
+			imp.getCalibration().pixelDepth = resolution[ 2 ];
+			imp.getCalibration().setUnit( "um" );
+
+			System.out.println( "saving" );
+			IJ.save( imp, options.output );
+			System.out.println( "done" );
+		}
 
 //		InputTriggerConfig trigConfig = bdv.getBdvHandle().getViewerPanel().getOptionValues().getInputTriggerConfig();
 //		if( trigConfig == null )
@@ -257,9 +264,50 @@ public class KDTreeRendererVNC<T extends RealType<T>,P extends RealLocalizable>
 //		RKActions.installActionBindings( bdv.getBdvHandle().getKeybindings(), bdv.getBdvHandle().getViewerPanel(), 
 //				rc, trigConfig );
 
-		
 
 //		recordMovie( bdv.getBdvHandle().getViewerPanel() );
+	}
+	
+	public static FinalInterval transformRealInterval( RealTransform xfm, RealInterval interval )
+	{
+		int nd = interval.numDimensions();
+		double[] pt = new double[ nd ];
+		double[] ptxfm = new double[ nd ];
+
+		long[] min = new long[ nd ];
+		long[] max = new long[ nd ];
+
+		// transform min		
+		for( int d = 0; d < nd; d++ )
+			pt[ d ] = interval.realMin( d );
+		
+		xfm.apply( pt, ptxfm );
+		copyToLongFloor( ptxfm, min );
+
+
+		// transform max
+		
+		for( int d = 0; d < nd; d++ )
+		{
+			pt[ d ] = interval.realMax( d );
+		}
+		
+		xfm.apply( pt, ptxfm );
+		copyToLongCeil( ptxfm, max );
+		
+		return new FinalInterval( min, max );
+	}
+
+	public static void copyToLongFloor( final double[] src, final long[] dst )
+	{
+		for( int d = 0; d < src.length; d++ )
+			dst[ d ] = (long)Math.floor( src[d] );
+	}
+
+	public static void copyToLongCeil( final double[] src, final long[] dst )
+	{
+		for( int d = 0; d < src.length; d++ )
+			dst[ d ] = (long)Math.floor( src[d] );
 	}
 
 	public static class RKActions extends Actions
@@ -441,7 +489,7 @@ public class KDTreeRendererVNC<T extends RealType<T>,P extends RealLocalizable>
 		
 	}
 
-	public static KDTreeRendererRaw<DoubleType,RealPoint> load( final String locationCsvF, final String confCsvF )
+	public static KDTreeRendererRaw<DoubleType,RealPoint> load( final String locationCsvF, final String confCsvF, int subFactor )
 	{
 
 		boolean success = false;
@@ -459,21 +507,15 @@ public class KDTreeRendererVNC<T extends RealType<T>,P extends RealLocalizable>
 			Arrays.fill( min, Long.MAX_VALUE );
 			Arrays.fill( max, Long.MIN_VALUE );
 
-			int subFactor = 1;
-
-			ArrayList< RealPoint > pts = new ArrayList<>();
+			final ArrayList< RealPoint > pts = new ArrayList<>();
 			for( int i = 0; i < lines.size(); i += subFactor )
 			{
-				double x = Double.parseDouble( lines.get( i )[ 0 ] );
-				double y = Double.parseDouble( lines.get( i )[ 1 ] );
-				double z = Double.parseDouble( lines.get( i )[ 2 ] );
+				final double x = Double.parseDouble( lines.get( i )[ 0 ] );
+				final double y = Double.parseDouble( lines.get( i )[ 1 ] );
+				final double z = Double.parseDouble( lines.get( i )[ 2 ] );
+
 				double[] p = new double[] { x, y, z };
-
-				RealPoint pt = new RealPoint( p );
-
-//				System.out.println( pt );
-
-				pts.add( pt );
+				pts.add( new RealPoint( p ));
 
 				for( int d = 0; d < 3; d++ )
 				{
@@ -496,6 +538,8 @@ public class KDTreeRendererVNC<T extends RealType<T>,P extends RealLocalizable>
 
 
 			itvl = new FinalInterval( min, max );
+			System.out.println( "" + itvl );
+			
 			treeRenderer = new KDTreeRendererRaw<DoubleType,RealPoint>( vals, pts );
 			treeRenderer.setInterval( itvl );
 
