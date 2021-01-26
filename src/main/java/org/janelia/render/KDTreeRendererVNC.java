@@ -5,7 +5,11 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.DoubleUnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -22,21 +26,32 @@ import org.scijava.ui.behaviour.util.InputActionBindings;
 
 import com.opencsv.CSVReader;
 
+import bdv.export.ProgressWriter;
+import bdv.export.ProgressWriterConsole;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.viewer.ViewerPanel;
+import bigwarp.BigWarpExporter;
 import ij.IJ;
 import ij.ImagePlus;
+import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
+import net.imglib2.IterableInterval;
 import net.imglib2.KDTree;
+import net.imglib2.RandomAccess;
+import net.imglib2.RandomAccessible;
+import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.exception.ImgLibException;
+import net.imglib2.img.Img;
+import net.imglib2.img.ImgFactory;
+import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.interpolation.neighborsearch.RBFInterpolator;
 import net.imglib2.realtransform.AffineGet;
@@ -45,11 +60,13 @@ import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Scale3D;
 import net.imglib2.type.numeric.ARGBType;
+import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.util.Pair;
 import net.imglib2.util.ValuePair;
 import net.imglib2.view.IntervalView;
+import net.imglib2.view.MixedTransformView;
 import net.imglib2.view.Views;
 
 
@@ -79,6 +96,9 @@ public class KDTreeRendererVNC<T extends RealType<T>,P extends RealLocalizable>
 
 		@Option(name = "-f", aliases = {"--subsample-pts"}, required = false, usage = "Subsampling factor for points")
 		private int subFactor = 1;
+
+		@Option(name = "-t", aliases = {"--threads"}, required = false, usage = "Number of threads")
+		private int nThreads = 1;
 		
 		private boolean parsedSuccessfully;
 
@@ -243,10 +263,16 @@ public class KDTreeRendererVNC<T extends RealType<T>,P extends RealLocalizable>
 			IntervalView< DoubleType > img = Views.interval( 
 					Views.raster( RealViews.affine( sourceItvl.getA(), renderXfm ) ),
 					renderInterval );
+			
+			
+			RandomAccessibleInterval< DoubleType > resultImg = copyToImageStackIterOrder( 
+					img,
+					renderInterval,
+					new ArrayImgFactory<>( new DoubleType() ),
+					options.nThreads,
+					new ProgressWriterConsole() );
 
-//			BdvFunctions.show( img, "render Img" );
-
-			ImagePlus imp = ImageJFunctions.wrap( img, "rendered" );
+			ImagePlus imp = ImageJFunctions.wrap( resultImg, "rendered" );
 			imp.getCalibration().pixelWidth = resolution[ 0 ];
 			imp.getCalibration().pixelHeight = resolution[ 1 ];
 			imp.getCalibration().pixelDepth = resolution[ 2 ];
@@ -556,4 +582,85 @@ public class KDTreeRendererVNC<T extends RealType<T>,P extends RealLocalizable>
 		
 		return treeRenderer;
 	}
+	
+	public static < T extends NumericType<T> > RandomAccessibleInterval<T> copyToImageStackIterOrder( 
+			final RandomAccessible< T > raible,
+			final Interval itvl,
+			final ImgFactory<T> factory,
+			final int nThreads,
+			final ProgressWriter progress )
+	{
+		// create the image plus image
+		Img< T > target = factory.create( itvl );
+		return copyToImageStackIterOrder( raible, itvl, target, nThreads, progress );
+	}
+
+	public static < T extends NumericType<T> > RandomAccessibleInterval<T> copyToImageStackIterOrder( 
+			final RandomAccessible< T > ra,
+			final Interval itvl,
+			final RandomAccessibleInterval<T> target,
+			final int nThreads,
+			final ProgressWriter progress )
+	{
+		progress.setProgress(0.0);
+		// TODO I wish I didn't have to do this inside this method..
+		// 	Maybe I don't have to, and should do it where I call this instead?
+
+		ExecutorService threadPool = Executors.newFixedThreadPool( nThreads );
+
+		LinkedList<Callable<Boolean>> jobs = new LinkedList<Callable<Boolean>>();
+		for( int i = 0; i < nThreads; i++ )
+		{
+
+			final int offset = i;
+			jobs.add( new Callable<Boolean>()
+			{
+				public Boolean call()
+				{
+					try
+					{
+						IterableInterval<T> it = Views.flatIterable( target );
+						final RandomAccess< T > access = ra.randomAccess();
+
+						long N = it.size();
+						final Cursor< T > c = it.cursor();
+						c.jumpFwd( 1 + offset );
+						for( long j = offset; j < N; j += nThreads )
+						{
+							access.setPosition( c );
+							c.get().set( access.get() );
+							c.jumpFwd( nThreads );
+							
+							if( offset == 0  && j % (nThreads * 100000) == 0 )
+							{
+								double ratio = 1.0 * j / N;
+								progress.setProgress( ratio ); 
+							}
+						}
+
+						return true;
+					}
+					catch( Exception e )
+					{
+						e.printStackTrace();
+					}
+					return false;
+				}
+			});
+		}
+		try
+		{
+			threadPool.invokeAll( jobs );
+			threadPool.shutdown(); // wait for all jobs to finish
+
+		}
+		catch ( InterruptedException e1 )
+		{
+			e1.printStackTrace();
+		}
+
+		progress.setProgress(1.0);
+		return target;
+	}
+	
 }
