@@ -38,10 +38,10 @@ import net.imglib2.FinalInterval;
 import net.imglib2.RealPoint;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.ClippedTransitionRealTransform;
-import net.imglib2.realtransform.IncrementalInverter;
-import net.imglib2.realtransform.PosFieldTransformInverseGradientDescent;
-import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformSequence;
+import net.imglib2.transform.IncrementalInverter;
+import net.imglib2.transform.PosFieldTransformInverseGradientDescent;
+import net.imglib2.realtransform.RealTransform;
 import net.imglib2.util.Util;
 
 /**

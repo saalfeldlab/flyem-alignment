@@ -611,7 +611,7 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 			final int numScales = n5.list(datasetName).length;
 
 			@SuppressWarnings("unchecked")
-			final RandomAccessibleInterval<UnsignedByteType>[] mipmaps = (RandomAccessibleInterval<UnsignedByteType>[])new RandomAccessibleInterval[numScales];
+			final RandomAccessibleInterval<T>[] mipmaps = (RandomAccessibleInterval<T>[])new RandomAccessibleInterval[numScales];
 			final double[][] scales = new double[numScales][];
 
 			for (int s = 0; s < numScales; ++s) {
@@ -619,7 +619,7 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 				final int scale = 1 << s;
 				final double inverseScale = 1.0 / scale;
 
-				final RandomAccessibleInterval<UnsignedByteType> source = N5Utils.open(n5, datasetName + "/s" + s);
+				final RandomAccessibleInterval<T> source = N5Utils.open(n5, datasetName + "/s" + s);
 				
 				System.out.println("s " + s );	
 				System.out.println( Util.printInterval( source )  + "\n" );
@@ -628,16 +628,16 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 				final Scale3D scale3D = new Scale3D(inverseScale, inverseScale, inverseScale);
 				transformSequence.add(scale3D);
 
-				final RandomAccessibleInterval<UnsignedByteType> cachedSource = KDTreeRendererRaw.wrapAsVolatileCachedCellImg(source, new int[]{64, 64, 64});
+				final RandomAccessibleInterval<T> cachedSource = KDTreeRendererRaw.wrapAsVolatileCachedCellImg(source, new int[]{64, 64, 64});
 
 				mipmaps[s] = cachedSource;
 				scales[s] = new double[]{scale, scale, scale};
 			}
 
-			final RandomAccessibleIntervalMipmapSource<UnsignedByteType> mipmapSource =
+			final RandomAccessibleIntervalMipmapSource<T> mipmapSource =
 					new RandomAccessibleIntervalMipmapSource<>(
 							mipmaps,
-							new UnsignedByteType(),
+							Util.getTypeFromInterval( mipmaps[ 0 ]),
 							scales,
 							voxelDimensions,
 							datasetName);

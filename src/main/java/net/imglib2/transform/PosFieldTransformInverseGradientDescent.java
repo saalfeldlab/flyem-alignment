@@ -1,4 +1,4 @@
-package net.imglib2.realtransform;
+package net.imglib2.transform;
 
 import org.ejml.data.DenseMatrix64F;
 import org.ejml.ops.CommonOps;
@@ -7,6 +7,7 @@ import org.ejml.ops.NormOps;
 import jitk.spline.TransformInverseGradientDescent;
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPositionable;
+import net.imglib2.realtransform.RealTransform;
 
 import java.util.Arrays;
 
