@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.DoubleUnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -27,6 +28,7 @@ import net.imglib2.img.imageplus.FloatImagePlus;
 import net.imglib2.img.imageplus.ImagePlusImgs;
 import net.imglib2.interpolation.neighborsearch.RBFInterpolator;
 import net.imglib2.loops.LoopBuilder;
+import net.imglib2.parallel.TaskExecutors;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealTransform;
 import net.imglib2.realtransform.RealTransformRandomAccessible;
@@ -65,6 +67,9 @@ public class KDTreeRendererCsv<T extends RealType<T>,P extends RealLocalizable>
 
 		@Option(name = "-s", aliases = {"--size"}, required = true, usage = "Output image size")
 		private String sizeString;
+
+		@Option(name = "-q", aliases = {"--nThreads"}, required = false, usage = "Number of threads")
+		private int nThreads = 1;
 
 		public Options(final String[] args) {
 
@@ -173,7 +178,7 @@ public class KDTreeRendererCsv<T extends RealType<T>,P extends RealLocalizable>
 
 		IntervalView< DoubleType > img = Views.interval( Views.raster( transformedSource ), itvl );
 
-		IJ.save( copyToImagePlus( img ), options.output );
+		IJ.save( copyToImagePlus( img, options.nThreads ), options.output );
 	}
 
 	public static double[] strToDouble( final String[] s )
@@ -186,10 +191,18 @@ public class KDTreeRendererCsv<T extends RealType<T>,P extends RealLocalizable>
 	}
 
 	public static <T extends RealType<T>> ImagePlus copyToImagePlus( 
-			final RandomAccessibleInterval< T > img )
+			final RandomAccessibleInterval< T > img,
+			final int nThreads )
 	{
 		final FloatImagePlus< FloatType > outImg = ImagePlusImgs.floats( Intervals.dimensionsAsLongArray( img ) );
-		LoopBuilder.setImages( img, outImg ).forEachPixel( (x,y) -> y.setReal( x.getRealDouble() ));
+
+		LoopBuilder< BiConsumer< T, FloatType > > loop;
+		if( nThreads == 1)
+			loop = LoopBuilder.setImages( img, outImg );
+		else
+			loop = LoopBuilder.setImages( img, outImg ).multiThreaded( TaskExecutors.fixedThreadPool( nThreads ) );
+
+		loop.forEachPixel( (x,y) -> y.setReal( x.getRealDouble() ));
 		return outImg.getImagePlus();
 	}
 
