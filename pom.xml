@@ -18,7 +18,7 @@
   <parent>
   	<groupId>org.scijava</groupId>
   	<artifactId>pom-scijava</artifactId>
-  	<version>15.0.0</version>
+  	<version>31.1.0</version>
   </parent>
 <dependencies>
 	<dependency>
@@ -47,12 +47,6 @@
 	<dependency>
 		<groupId>org.janelia.saalfeldlab</groupId>
 		<artifactId>n5</artifactId>
-		<version>2.0.3-SNAPSHOT</version>
-	</dependency>
-	<dependency>
-		<groupId>org.saalfeldlab</groupId>
-		<artifactId>n5-utils</artifactId>
-		<version>0.0.2-SNAPSHOT</version>
 	</dependency>
 	<dependency>
 		<groupId>net.imglib2</groupId>
@@ -77,7 +71,7 @@
 	<dependency>
 		<groupId>net.imglib2</groupId>
 		<artifactId>imglib2</artifactId>
-		<version>5.1.0</version>
+		<version>5.12.0</version>
 	</dependency>
 	<dependency>
 		<groupId>sc.fiji</groupId>
@@ -87,7 +81,6 @@
 	<dependency>
 		<groupId>org.janelia.saalfeldlab</groupId>
 		<artifactId>n5-imglib2</artifactId>
-		<version>3.0.1-SNAPSHOT</version>
 	</dependency>
 	<dependency>
 		<groupId>net.imglib2</groupId>
@@ -103,5 +96,41 @@
 		<groupId>sc.fiji</groupId>
 		<artifactId>IO_</artifactId>
 	</dependency>
+		<dependency>
+			<groupId>info.picocli</groupId>
+			<artifactId>picocli</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.janelia.saalfeldlab</groupId>
+			<artifactId>n5-ij</artifactId>
+		</dependency>
 </dependencies>
+<properties>
+  <enforcer.skip>true</enforcer.skip>
+  <n5.version>2.5.1</n5.version>
+   <n5-imglib2.version>4.3.0</n5-imglib2.version>
+   <n5-ij.version>3.2.1</n5-ij.version>
+</properties>
+
+<build>
+  <plugins>
+      <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-assembly-plugin</artifactId>
+          <configuration>
+              <descriptorRefs>
+                  <descriptorRef>jar-with-dependencies</descriptorRef>
+              </descriptorRefs>
+          </configuration>
+          <executions>
+              <execution>
+                  <phase>package</phase>
+                  <goals>
+                  <goal>single</goal>
+                  </goals>
+              </execution>
+          </executions>
+      </plugin>
+  </plugins>
+</build>
 </project>
