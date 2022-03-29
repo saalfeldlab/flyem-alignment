@@ -798,7 +798,6 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable> 
 			options = bdv == null ? Bdv.options() : Bdv.options().addTo(bdv);
 		else if( bdv != null )
 		{
-			System.out.println("add to");
 			options = options.addTo( bdv );
 		}	
 		final BdvStackSource<?> stackSource = BdvFunctions.show(source, options);

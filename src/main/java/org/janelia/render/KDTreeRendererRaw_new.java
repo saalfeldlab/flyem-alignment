@@ -514,7 +514,7 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 		Source<T> source2render = mipmapSource;
 		if( transform != null  )
 		{
-			System.out.println("FlyEM space");
+//			System.out.println("FlyEM space");
 			TransformedSource<T> transformedSource = new TransformedSource<>(mipmapSource);
 			transformedSource.setFixedTransform( transform );
 			source2render = transformedSource;
