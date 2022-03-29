@@ -11,9 +11,11 @@ import java.util.concurrent.Callable;
 
 import javax.imageio.ImageIO;
 
+import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferInt;
 
 import org.scijava.ui.behaviour.KeyStrokeAdder;
 import org.scijava.ui.behaviour.KeyStrokeAdder.Factory;
@@ -37,12 +39,17 @@ import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalMipmapSource;
 import bdv.util.volatiles.SharedQueue;
+import bdv.viewer.BasicViewerState;
 import bdv.viewer.Source;
 import bdv.viewer.ViewerPanel;
+import bdv.viewer.ViewerState;
 import bdv.viewer.render.MultiResolutionRenderer;
-import bdv.viewer.state.ViewerState;
+import bdv.viewer.render.PainterThread;
+import bdv.viewer.render.RenderTarget;
+import bdv.viewer.render.awt.BufferedImageRenderResult;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import mpicbg.spim.data.sequence.VoxelDimensions;
+import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.KDTree;
@@ -56,7 +63,10 @@ import net.imglib2.cache.Cache;
 import net.imglib2.cache.img.CachedCellImg;
 import net.imglib2.cache.img.LoadedCellCacheLoader;
 import net.imglib2.cache.ref.SoftRefLoaderCache;
+import net.imglib2.display.screenimage.awt.ARGBScreenImage;
 import net.imglib2.exception.ImgLibException;
+import net.imglib2.img.Img;
+import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.img.basictypeaccess.AccessFlags;
 import net.imglib2.img.basictypeaccess.ArrayDataAccessFactory;
 import net.imglib2.img.cell.Cell;
@@ -76,8 +86,6 @@ import net.imglib2.type.numeric.integer.GenericShortType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.ui.PainterThread;
-import net.imglib2.ui.RenderTarget;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
 import net.imglib2.view.Views;
@@ -286,7 +294,7 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable> 
 		final int height = 1024;
 		String dir = "/groups/saalfeld/home/bogovicj/record";
 		
-		final ViewerState renderState = viewer.getState();
+		final ViewerState renderState = new BasicViewerState( viewer.state().snapshot() );
 		
 		int start = -715;
 		int end = -350;
@@ -298,20 +306,51 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable> 
 		
 		AffineTransform3D xfm = new AffineTransform3D();
 		xfm.set( xfmArray );
-		
-		class MyTarget implements RenderTarget
-		{
-			BufferedImage bi;
 
-			@Override
-			public BufferedImage setBufferedImage( final BufferedImage bufferedImage )
+		class MyTarget implements RenderTarget< BufferedImageRenderResult >
+		{
+			final ARGBScreenImage accumulated = new ARGBScreenImage( width, height );
+
+			final BufferedImageRenderResult renderResult = new BufferedImageRenderResult();
+
+			public void clear()
 			{
-				bi = bufferedImage;
-				return null;
+				for ( final ARGBType acc : accumulated )
+					acc.setZero();
 			}
 
 			@Override
-			public int getWidth()
+			public BufferedImageRenderResult getReusableRenderResult()
+			{
+				return renderResult;
+			}
+
+			@Override
+			public BufferedImageRenderResult createRenderResult()
+			{
+				return new BufferedImageRenderResult();
+			}
+
+			@Override
+			public void setRenderResult( final BufferedImageRenderResult renderResult )
+			{
+				final BufferedImage bufferedImage = renderResult.getBufferedImage();
+				final Img< ARGBType > argbs = ArrayImgs.argbs( ( ( DataBufferInt ) bufferedImage.getData().getDataBuffer() ).getData(), width, height );
+				final Cursor< ARGBType > c = argbs.cursor();
+				for ( final ARGBType acc : accumulated )
+				{
+					final int current = acc.get();
+					final int in = c.next().get();
+					acc.set( ARGBType.rgba(
+							Math.max( ARGBType.red( in ), ARGBType.red( current ) ),
+							Math.max( ARGBType.green( in ), ARGBType.green( current ) ),
+							Math.max( ARGBType.blue( in ), ARGBType.blue( current ) ),
+							Math.max( ARGBType.alpha( in ), ARGBType.alpha( current ) )	) );
+				}
+			}
+
+			@Override
+			public final int getWidth()
 			{
 				return width;
 			}
@@ -322,12 +361,20 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable> 
 				return height;
 			}
 		}
-		
-		final MyTarget target = new MyTarget();
-		final MultiResolutionRenderer renderer = new MultiResolutionRenderer(
-				target, new PainterThread( null ), new double[] { 1 }, 0, false, 1, null, false,
-				viewer.getOptionValues().getAccumulateProjectorFactory(), new CacheControl.Dummy() );
 
+		final MyTarget target = new MyTarget();
+		
+		MultiResolutionRenderer renderer = new MultiResolutionRenderer(
+				target, 
+				new PainterThread( null ), 
+				new double[]{1}, 
+				0, 
+				1, 
+				null, 
+				false, 
+				viewer.getOptionValues().getAccumulateProjectorFactory(), 
+				new CacheControl.Dummy());
+		
 		renderState.setViewerTransform( xfm );
 
 		for ( int z = start; z < end; z+= step )
@@ -340,7 +387,9 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable> 
 
 			try 
 			{
-				ImageIO.write( target.bi, "png", new File( String.format( "%s/img-%04d.png", dir, z ) ) );
+
+				final BufferedImage bi = target.accumulated.image();
+				ImageIO.write( bi, "png", new File( String.format( "%s/img-%04d.png", dir, z ) ) );
 			}
 			catch (IOException e)
 			{

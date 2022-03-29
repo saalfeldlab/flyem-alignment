@@ -1,8 +1,6 @@
 package org.janelia.maleBrain;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -14,48 +12,29 @@ import java.util.stream.Stream;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 
-import javax.imageio.ImageIO;
-
-import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
-import java.awt.image.BufferedImage;
 
 import org.scijava.ui.behaviour.KeyStrokeAdder;
 import org.scijava.ui.behaviour.KeyStrokeAdder.Factory;
-import org.scijava.ui.behaviour.io.InputTriggerConfig;
 import org.scijava.ui.behaviour.util.Actions;
 
-import org.janelia.render.SynPrediction.SynCollection;
-import org.janelia.render.TbarPrediction.TbarCollection;
-import org.janelia.saalfeldlab.n5.N5FSReader;
-import org.janelia.saalfeldlab.n5.N5Reader;
-import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.imglib2.RandomAccessibleLoader;
 
 import org.scijava.ui.behaviour.util.InputActionBindings;
 
-import bdv.cache.CacheControl;
-import bdv.tools.transformation.TransformedSource;
 import bdv.util.Bdv;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
 import bdv.util.BdvStackSource;
-import bdv.util.RandomAccessibleIntervalMipmapSource;
-import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Source;
 import bdv.viewer.ViewerPanel;
-import bdv.viewer.render.MultiResolutionRenderer;
-import bdv.viewer.state.ViewerState;
 import ij.IJ;
 import ij.ImagePlus;
-import mpicbg.spim.data.sequence.FinalVoxelDimensions;
-import mpicbg.spim.data.sequence.VoxelDimensions;
 import net.imglib2.FinalInterval;
 import net.imglib2.FinalRealInterval;
 import net.imglib2.Interval;
 import net.imglib2.KDTree;
-import net.imglib2.Point;
 import net.imglib2.RandomAccessibleInterval;
 import net.imglib2.RealInterval;
 import net.imglib2.RealLocalizable;
@@ -79,26 +58,20 @@ import net.imglib2.interpolation.neighborsearch.RBFInterpolator;
 import net.imglib2.loops.LoopBuilder;
 import net.imglib2.parallel.DefaultTaskExecutor;
 import net.imglib2.realtransform.AffineTransform3D;
-import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Scale3D;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.PrimitiveType;
-import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.GenericByteType;
 import net.imglib2.type.numeric.integer.GenericIntType;
 import net.imglib2.type.numeric.integer.GenericLongType;
 import net.imglib2.type.numeric.integer.GenericShortType;
-import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.numeric.real.FloatType;
-import net.imglib2.ui.PainterThread;
-import net.imglib2.ui.RenderTarget;
 import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
 import net.imglib2.view.IntervalView;
-import net.imglib2.view.RandomAccessibleOnRealRandomAccessible;
 import net.imglib2.view.Views;
 
 import picocli.CommandLine;
@@ -200,7 +173,6 @@ public class KDTreeRendererMaleBrain<T extends RealType<T>,P extends RealLocaliz
 //		//RadiusChange<DoubleType> rc = new RadiusChange<DoubleType>( amount );
 //		RadiusChange<DoubleType> rc = new RadiusChange<DoubleType>();
 
-
 		// load synapses
 		System.out.println( "loading");
 		KDTreeRendererMaleBrain<DoubleType,RealPoint> treeRenderer = load( tbarPath );
@@ -211,15 +183,6 @@ public class KDTreeRendererMaleBrain<T extends RealType<T>,P extends RealLocaliz
 		{
 			// This works
 			BdvStackSource<DoubleType> bdv = BdvFunctions.show( source, itvl, "tbar render", bdvOpts );
-
-//			InputTriggerConfig trigConfig = bdv.getBdvHandle().getViewerPanel().getOptionValues().getInputTriggerConfig();
-//			if( trigConfig == null )
-//				trigConfig = new InputTriggerConfig();
-//			
-//			RKActions.installActionBindings( bdv.getBdvHandle().getKeybindings(), bdv.getBdvHandle().getViewerPanel(), 
-//					rc, trigConfig );
-//
-//			recordMovie( bdv.getBdvHandle().getViewerPanel() );
 
 		}
 		else{
@@ -271,76 +234,6 @@ public class KDTreeRendererMaleBrain<T extends RealType<T>,P extends RealLocaliz
 		CommandLine.call( new KDTreeRendererMaleBrain(), args );
 	}
 	
-	public static void recordMovie( ViewerPanel viewer )
-	{
-		final int width = 1280;
-		final int height = 1024;
-		String dir = "/groups/saalfeld/home/bogovicj/record";
-		
-		final ViewerState renderState = viewer.getState();
-		
-		int start = -715;
-		int end = -350;
-		int step = 10;
-		double[] xfmArray = new double[]{
-				-0.02420699152030538, 2.6020852139652106E-18, -4.336808689942018E-18, 1105.676175769312, 
-				-7.806255641895632E-18, -8.673617379884035E-18, 0.024206991520305372, 29.14286687653413,
-				-8.673617379884035E-19, 0.02420699152030538, 5.204170427930421E-18, start };
-		
-		AffineTransform3D xfm = new AffineTransform3D();
-		xfm.set( xfmArray );
-		
-		class MyTarget implements RenderTarget
-		{
-			BufferedImage bi;
-
-			@Override
-			public BufferedImage setBufferedImage( final BufferedImage bufferedImage )
-			{
-				bi = bufferedImage;
-				return null;
-			}
-
-			@Override
-			public int getWidth()
-			{
-				return width;
-			}
-
-			@Override
-			public int getHeight()
-			{
-				return height;
-			}
-		}
-		
-		final MyTarget target = new MyTarget();
-		final MultiResolutionRenderer renderer = new MultiResolutionRenderer(
-				target, new PainterThread( null ), new double[] { 1 }, 0, false, 1, null, false,
-				viewer.getOptionValues().getAccumulateProjectorFactory(), new CacheControl.Dummy() );
-
-		renderState.setViewerTransform( xfm );
-
-		for ( int z = start; z < end; z+= step )
-		{
-			renderer.requestRepaint();
-			renderer.paint( renderState );
-			
-			xfm.set( z, 2, 3);
-			renderState.setViewerTransform( xfm );
-
-			try 
-			{
-				ImageIO.write( target.bi, "png", new File( String.format( "%s/img-%04d.png", dir, z ) ) );
-			}
-			catch (IOException e)
-			{
-				e.printStackTrace();
-			}
-			System.out.println( "slice: " + z );
-		}
-	}
-
 	public static class RKActions extends Actions
 	{
 		public final static String SAYHI = "sayhi";

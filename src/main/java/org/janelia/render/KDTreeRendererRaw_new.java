@@ -13,6 +13,7 @@ import javax.imageio.ImageIO;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferInt;
 
 import org.scijava.ui.behaviour.KeyStrokeAdder;
 import org.scijava.ui.behaviour.KeyStrokeAdder.Factory;
@@ -40,9 +41,13 @@ import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Source;
 import bdv.viewer.ViewerPanel;
 import bdv.viewer.render.MultiResolutionRenderer;
+import bdv.viewer.render.PainterThread;
+import bdv.viewer.render.RenderTarget;
+import bdv.viewer.render.awt.BufferedImageRenderResult;
 import bdv.viewer.state.ViewerState;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import mpicbg.spim.data.sequence.VoxelDimensions;
+import net.imglib2.Cursor;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.KDTree;
@@ -52,7 +57,10 @@ import net.imglib2.RealLocalizable;
 import net.imglib2.RealPoint;
 import net.imglib2.RealRandomAccess;
 import net.imglib2.RealRandomAccessible;
+import net.imglib2.display.screenimage.awt.ARGBScreenImage;
 import net.imglib2.exception.ImgLibException;
+import net.imglib2.img.Img;
+import net.imglib2.img.array.ArrayImgs;
 import net.imglib2.interpolation.neighborsearch.RBFInterpolator;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.RealTransformSequence;
@@ -62,8 +70,6 @@ import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.real.DoubleType;
-import net.imglib2.ui.PainterThread;
-import net.imglib2.ui.RenderTarget;
 import net.imglib2.util.Pair;
 import net.imglib2.util.Util;
 import net.imglib2.view.Views;
@@ -307,76 +313,6 @@ public class KDTreeRendererRaw_new<T extends RealType<T>,P extends RealLocalizab
 //		recordMovie( bdv.getBdvHandle().getViewerPanel() );
 	}
 	
-	public static void recordMovie( ViewerPanel viewer )
-	{
-		final int width = 1280;
-		final int height = 1024;
-		String dir = "/groups/saalfeld/home/bogovicj/record";
-		
-		final ViewerState renderState = viewer.getState();
-		
-		int start = -715;
-		int end = -350;
-		int step = 10;
-		double[] xfmArray = new double[]{
-				-0.02420699152030538, 2.6020852139652106E-18, -4.336808689942018E-18, 1105.676175769312, 
-				-7.806255641895632E-18, -8.673617379884035E-18, 0.024206991520305372, 29.14286687653413,
-				-8.673617379884035E-19, 0.02420699152030538, 5.204170427930421E-18, start };
-		
-		AffineTransform3D xfm = new AffineTransform3D();
-		xfm.set( xfmArray );
-		
-		class MyTarget implements RenderTarget
-		{
-			BufferedImage bi;
-
-			@Override
-			public BufferedImage setBufferedImage( final BufferedImage bufferedImage )
-			{
-				bi = bufferedImage;
-				return null;
-			}
-
-			@Override
-			public int getWidth()
-			{
-				return width;
-			}
-
-			@Override
-			public int getHeight()
-			{
-				return height;
-			}
-		}
-		
-		final MyTarget target = new MyTarget();
-		final MultiResolutionRenderer renderer = new MultiResolutionRenderer(
-				target, new PainterThread( null ), new double[] { 1 }, 0, false, 1, null, false,
-				viewer.getOptionValues().getAccumulateProjectorFactory(), new CacheControl.Dummy() );
-
-		renderState.setViewerTransform( xfm );
-
-		for ( int z = start; z < end; z+= step )
-		{
-			renderer.requestRepaint();
-			renderer.paint( renderState );
-			
-			xfm.set( z, 2, 3);
-			renderState.setViewerTransform( xfm );
-
-			try 
-			{
-				ImageIO.write( target.bi, "png", new File( String.format( "%s/img-%04d.png", dir, z ) ) );
-			}
-			catch (IOException e)
-			{
-				e.printStackTrace();
-			}
-			System.out.println( "slice: " + z );
-		}
-	}
-
 	public static class RKActions extends Actions
 	{
 		public final static String SAYHI = "sayhi";
