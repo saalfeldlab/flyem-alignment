@@ -1,10 +1,12 @@
-package net.imglib2.realtransform;
+package net.imglib2.transform;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 
 import net.imglib2.RealLocalizable;
 import net.imglib2.RealPositionable;
+import net.imglib2.realtransform.RealTransform;
+import net.imglib2.realtransform.RealTransformSequence;
 
 public class IncrementalInverter implements RealTransform
 {
