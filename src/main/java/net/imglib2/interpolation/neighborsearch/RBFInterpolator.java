@@ -30,7 +30,9 @@ public class RBFInterpolator<T extends RealType<T>> extends RealPoint implements
 
 	final T value;
 	
-	double searchRadius;
+	protected double searchRadius;
+	
+	protected double threshold = 0;
 
 	final DoubleUnaryOperator rbf;  // from squaredDistance to weight
 	
@@ -43,6 +45,7 @@ public class RBFInterpolator<T extends RealType<T>> extends RealPoint implements
 			final KDTree< T > tree, 
 			final DoubleUnaryOperator rbf, 
 			final double searchRadius,
+			final double threshold,
 			final boolean normalize,
 			T t )
 	{
@@ -53,10 +56,36 @@ public class RBFInterpolator<T extends RealType<T>> extends RealPoint implements
 		this.search = new RadiusNeighborSearchOnKDTree< T >( tree );
 		this.normalize = normalize;
 		this.searchRadius = searchRadius;
+		this.threshold = threshold;
 
 		this.value = t.copy();
 	}
+
+	public RBFInterpolator(
+			final KDTree< T > tree, 
+			final DoubleUnaryOperator rbf, 
+			final double searchRadius,
+			final boolean normalize,
+			T t )
+	{
+		this( tree, rbf, searchRadius, 0, normalize, t.copy() );
+	}
 	
+	public double getThreshold()
+	{
+		return this.threshold;
+	}
+
+	public void setThreshold( final double threshold )
+	{
+		this.threshold = threshold;
+	}
+
+	public double getRadius( )
+	{
+		return searchRadius;
+	}
+
 	public void setRadius( final double radius )
 	{
 		this.searchRadius = radius;
@@ -95,6 +124,10 @@ public class RBFInterpolator<T extends RealType<T>> extends RealPoint implements
 					break;
 
 				final T t = sampler.get();
+				
+				if( t.getRealDouble() < threshold )
+					continue;
+
 				final double weight = rbf.applyAsDouble( search.getSquareDistance( i ) );
 
 				if( normalize )
@@ -116,7 +149,7 @@ public class RBFInterpolator<T extends RealType<T>> extends RealPoint implements
 	public RBFInterpolator< T > copy()
 	{
 		return new RBFInterpolator< T >( tree,
-				rbf, searchRadius, normalize, value );
+				rbf, searchRadius, threshold, normalize, value );
 	}
 
 	@Override

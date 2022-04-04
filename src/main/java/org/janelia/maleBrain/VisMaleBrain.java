@@ -38,121 +38,158 @@ import process.RenderTransformed;
 public class VisMaleBrain implements Callable<Void>
 {
 	
-	final String emRawN5 = "/nrs/flyem/render/n5/Z0720_07m_BR/40-06-final";
+	final String emRawN5 = "/nrs/flyem/render/n5/Z0720_07m_BR";
+	final String emRawDataset = "/40-06-final";
 
-	final String emClaheN5 = "/nrs/flyem/render/n5/Z0720_07m_BR/40-06-dvid-coords-clahe-from-jpeg.n5/grayscale";
-	
-	String templatePath = null;
-	String synapseRenderPath = null;
-	String dfieldPath = null;
+	final String emClaheN5 = "/nrs/flyem/render/n5/Z0720_07m_BR/40-06-dvid-coords-clahe-from-jpeg.n5";
+	final String emClaheDataset = "/grayscale";
+
+	String templatePath = "/groups/saalfeld/public/jrc2018/JRC2018_MALE_40x.nrrd";
+	String synapsesPath = "/nrs/saalfeld/john/flyem_maleBrain/tbars/render_tbars_512nm.nrrd";
+
+	String fwdDfieldPath = "/nrs/saalfeld/john/flyem_maleBrain/regexps/exp0009_script_0019.sh_20220328163849/result_0019/dfield.nrrd";
+	String invDfieldPath = null;
+
+	String templateClaheSpacePath = "/nrs/saalfeld/john/flyem_maleBrain/regexps/exp0029_t9_0029.sh_20220330165846/result_0029/JRC2018M_xfm_v2.nrrd";
 
 	boolean showRaw = false;
 	boolean showClahe = false;
+
 	private boolean showTemplate = false;
+	private boolean showTemplateOnEm = false;
+
 	private boolean showSynapses = false;
 
 	public VisMaleBrain() { }
 
-	public VisMaleBrain showRaw( boolean showRaw ) {
-		this.showRaw = showRaw;
-		return this;
+	public static void main( String[] args ) throws IOException
+	{
+		System.out.println( "start");
+		VisMaleBrain vis = new VisMaleBrain();
+		
+//		vis.showRaw = true;
+		vis.showClahe = true;
+		vis.showSynapses = true;
+//		vis.showTemplate = true;
+		vis.showTemplateOnEm = true;
+
+		vis.call();
 	}
 
-	public VisMaleBrain showClahe( boolean showClahe ) {
-		this.showClahe = showClahe;
-		return this;
+	public Void call() throws IOException
+	{
+		BdvStackSource<?> bdv = null;
+		BdvOptions opts = BdvOptions.options().numRenderingThreads(16);
+
+		if( showRaw )
+			opts = opts.addTo( KDTreeRendererRaw.loadImages(
+					emRawN5, 
+					Collections.singletonList( emRawDataset ),
+					rawTransform(), 
+					new FinalVoxelDimensions("nm", 8, 8, 8 ), 
+					true, 
+					bdv,
+					opts));
+		
+		if( showClahe )
+			opts = opts.addTo( KDTreeRendererRaw.loadImages(
+					emClaheN5, 
+					Collections.singletonList( emClaheDataset ),
+					claheTransform(), 
+					new FinalVoxelDimensions("nm", 8, 8, 8 ), 
+					true, 
+					bdv,
+					opts));
+		
+		if( showTemplate )
+		{
+			System.out.println( "show template");
+			bdv = loadImgTransform( templatePath, null, false, opts );
+			opts = opts.addTo ( bdv );
+		}
+
+		if( showTemplateOnEm )
+		{
+			System.out.println( "show template on EM");
+			bdv = loadImgTransform( templateClaheSpacePath, null, true, opts );
+			opts = opts.addTo ( bdv );
+		}
+
+		if( showSynapses )
+		{
+			System.out.println( "show synapses");
+//			bdv = loadImgTransform( synapsesPath, fwdDfieldPath, true, opts );
+			bdv = loadImgTransform( synapsesPath, null, true, opts );
+			opts = opts.addTo ( bdv );
+		}
+
+		return null;
 	}
 
-	public VisMaleBrain showTemplate(boolean showTemplate) {
-		this.showTemplate = showTemplate;
-		return this;
-	}
-
-	public VisMaleBrain showSynapses(boolean showSynapses) {
-		this.showSynapses = showSynapses;
-		return this;
-	}
-	
 	public AffineTransform3D rawTransform()
 	{
-		AffineTransform3D xfm = new AffineTransform3D();
+		final AffineTransform3D fwd = new AffineTransform3D();
+		fwd.set(0.0, 0.0, 1.0, 1772, 
+				0.0, 1.0, 0.0, -2304, 
+				1.0, 0.0, 0.0, 768 );
 
+		final AffineTransform3D xfm = fwd.inverse();
+		xfm.preConcatenate( new Scale3D( 8, 8, 8 ));
 		return xfm;
 	}
 
-	public <T extends RealType<T> & NativeType<T>> BdvStackSource loadImgTransform(BdvStackSource bdv,
+	public Scale3D umToNm() {
+		return new Scale3D( 1000, 1000, 1000 );
+	}
+	
+	public AffineTransform3D claheTransform()
+	{
+		final AffineTransform3D xfm = new AffineTransform3D();
+		xfm.preConcatenate( new Scale3D( 8, 8, 8 ));
+		return xfm;
+	}
+
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	public <T extends RealType<T> & NativeType<T>> BdvStackSource loadImgTransform(
+			String imagePath,
+			String transformPath,
+			boolean toNm,
 			BdvOptions opts) {
 
 		InvertibleRealTransform dfield = null;
-		if( dfieldPath != null )
-			dfield = TransformReader.readInvertible(dfieldPath);
+		if( transformPath != null )
+		{
+			System.out.println( "loading transform: " + transformPath );
+			dfield = TransformReader.readInvertible(transformPath);
+		}
+
 
 		IOHelper io = new IOHelper();
-		RandomAccessibleInterval<T> templateImg = io.readRai(templatePath);
-		bdv = BdvFunctions.show(templateImg, new File(templatePath).getName(), opts);
+		RandomAccessibleInterval<T> templateImg = io.readRai(imagePath);
 
 		Scale3D res = new Scale3D(io.getResolution());
+
+		if( toNm )
+			res.preConcatenate( umToNm() );
+
 		RealTransformSequence seq = new RealTransformSequence();
-		if( dfieldPath != null )
+		if( transformPath != null )
 			seq.add(dfield);
 
 		seq.add(res.inverse());
 
 		
 		RealRandomAccessible xfmImg = new RealTransformRandomAccessible( 
-				io.interpolateExtend(templateImg, "LINEAR", "border"),
+				io.interpolateExtend(templateImg, "LINEAR", "0"),
 				seq );
 		
-		RealPoint tmpPt = new RealPoint( Intervals.maxAsDoubleArray(templateImg));
-		seq.apply(tmpPt, tmpPt);
-		FinalInterval xfmItvl = new FinalInterval( 
-				Arrays.stream( tmpPt.positionAsDoubleArray() ).mapToLong( x -> (long)x).toArray());
+//		RealPoint tmpPt = new RealPoint( Intervals.maxAsDoubleArray(templateImg));
+//		seq.apply(tmpPt, tmpPt);
+//		FinalInterval xfmItvl = new FinalInterval( 
+//				Arrays.stream( tmpPt.positionAsDoubleArray() ).mapToLong( x -> (long)x).toArray());
 
-		return BdvFunctions.show( xfmImg, xfmItvl, "name", opts );
+		return BdvFunctions.show( xfmImg, templateImg, new File( imagePath ).getName(), opts );
 	}
 	
-	public Void call() throws IOException
-	{
-		BdvStackSource<?> bdv = null;
-		BdvOptions opts = BdvOptions.options();
-
-		if( showRaw )
-			KDTreeRendererRaw.loadImages(
-					emRawN5, 
-					Collections.singletonList( "grayscale" ),
-					rawTransform(), 
-					new FinalVoxelDimensions("nm", 8, 8, 8 ), 
-					true, 
-					bdv,
-					opts);
-		
-		if( showClahe )
-			KDTreeRendererRaw.loadImages(
-					emClaheN5, 
-					Collections.singletonList( "grayscale" ),
-					rawTransform(), 
-					new FinalVoxelDimensions("nm", 8, 8, 8 ), 
-					true, 
-					bdv,
-					opts);
-		
-		if( showTemplate )
-		{
-			bdv = loadImgTransform( bdv, opts );
-		}
-
-		return null;
-	}
-	
-	public static void main( String[] args ) throws IOException
-	{
-		System.out.println( "start");
-		VisMaleBrain vis = new VisMaleBrain();
-		vis.showTemplate(true);
-
-		vis.templatePath = "/home/john/projects/jrc2018/small_test_data/JRC2018_FEMALE_small.nrrd";
-
-		vis.call();
-	}
 
 }

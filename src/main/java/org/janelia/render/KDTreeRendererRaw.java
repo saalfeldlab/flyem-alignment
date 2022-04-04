@@ -678,7 +678,6 @@ public class KDTreeRendererRaw<T extends RealType<T>,P extends RealLocalizable> 
 			Source<?> source2render = volatileMipmapSource;
 			if( transform != null  )
 			{
-				System.out.println("FlyEM space");
 				TransformedSource<?> transformedSource = new TransformedSource<>(volatileMipmapSource);
 				transformedSource.setFixedTransform( transform );
 				source2render = transformedSource;

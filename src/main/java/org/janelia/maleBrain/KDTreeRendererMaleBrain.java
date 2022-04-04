@@ -17,8 +17,9 @@ import java.awt.event.KeyListener;
 
 import org.scijava.ui.behaviour.KeyStrokeAdder;
 import org.scijava.ui.behaviour.KeyStrokeAdder.Factory;
+import org.scijava.ui.behaviour.io.InputTriggerConfig;
 import org.scijava.ui.behaviour.util.Actions;
-
+import org.janelia.render.KDTreeRendererRaw.RKActions;
 import org.janelia.saalfeldlab.n5.imglib2.RandomAccessibleLoader;
 
 import org.scijava.ui.behaviour.util.InputActionBindings;
@@ -88,8 +89,14 @@ public class KDTreeRendererMaleBrain<T extends RealType<T>,P extends RealLocaliz
 	@Option(names = { "-r", "--radius"}, required = true, description = "Radius for synapse point spread function")
 	private double radius;
 
+	@Option(names = { "-t", "--threshold"}, required = false, description = "Confidence threshold")
+	private double threshold = 0.0;
+
 	@Option(names = { "-p", "--n5Path"}, required = false, description = "N5 path")
 	private String n5Path = "";
+
+	@Option(names = { "-j", "--nThreads"}, required = false, description = "Number of threads")
+	private int nThreads = 24;
 
 	@Option(names = { "-i", "--n5Datasets"}, required = false, description = "N5 image datasets")
 	private List<String> images = new ArrayList<>();
@@ -143,6 +150,14 @@ public class KDTreeRendererMaleBrain<T extends RealType<T>,P extends RealLocaliz
 		return tree;
 	}
 
+	public RBFRealRandomAccessible<T> getRbfRealRandomAccessible(
+			final double searchDist,
+			final DoubleUnaryOperator rbf )
+	{	
+		return new RBFRealRandomAccessible<>( this, searchDist, 50);
+
+	}
+	
 	public RealRandomAccessible<T> getRealRandomAccessible(
 			final double searchDist,
 			final DoubleUnaryOperator rbf )
@@ -166,23 +181,29 @@ public class KDTreeRendererMaleBrain<T extends RealType<T>,P extends RealLocaliz
 	public Void call() throws IOException
 	{
 		
-		BdvOptions bdvOpts = BdvOptions.options().numRenderingThreads( 24 )
+		BdvOptions bdvOpts = BdvOptions.options().numRenderingThreads( nThreads )
 				.preferredSize( 1280, 1024 );
-
-//		double amount = 20;
-//		//RadiusChange<DoubleType> rc = new RadiusChange<DoubleType>( amount );
-//		RadiusChange<DoubleType> rc = new RadiusChange<DoubleType>();
 
 		// load synapses
 		System.out.println( "loading");
 		KDTreeRendererMaleBrain<DoubleType,RealPoint> treeRenderer = load( tbarPath );
 		Interval itvl = treeRenderer.getInterval();
-		RealRandomAccessible<DoubleType> source = treeRenderer.getRealRandomAccessible( radius, KDTreeRendererMaleBrain::rbf );
+
+//		RealRandomAccessible<DoubleType> source = treeRenderer.getRealRandomAccessible( radius, KDTreeRendererMaleBrain::rbf );
+		RBFRealRandomAccessible<DoubleType> source = treeRenderer.getRbfRealRandomAccessible( radius, KDTreeRendererMaleBrain::rbf );
+		source.setThreshold( threshold );
 
 		if( outputFile == null )
 		{
 			// This works
 			BdvStackSource<DoubleType> bdv = BdvFunctions.show( source, itvl, "tbar render", bdvOpts );
+			
+			InputTriggerConfig trigConfig = bdv.getBdvHandle().getViewerPanel().getOptionValues().getInputTriggerConfig();
+			if( trigConfig == null )
+				trigConfig = new InputTriggerConfig();
+			
+			RKActions.installActionBindings( bdv.getBdvHandle().getKeybindings(), bdv.getBdvHandle().getViewerPanel(), 
+					source, trigConfig );
 
 		}
 		else{
@@ -213,7 +234,7 @@ public class KDTreeRendererMaleBrain<T extends RealType<T>,P extends RealLocaliz
 
 			System.out.println( "copying");
 			IntervalView<DoubleType> img = Views.interval( Views.raster( RealViews.affine(source, totalTransform) ), renderItvl );
-			LoopBuilder.setImages(img, out).multiThreaded( new DefaultTaskExecutor( Executors.newFixedThreadPool( 32 ))).forEachPixel( (x,y) -> { y.setReal( x.getRealDouble() );});
+			LoopBuilder.setImages(img, out).multiThreaded( new DefaultTaskExecutor( Executors.newFixedThreadPool( nThreads ))).forEachPixel( (x,y) -> { y.setReal( x.getRealDouble() );});
 
 			System.out.println( "writing");
 			ImagePlus imp = ImageJFunctions.wrap(out, "result");
@@ -237,21 +258,28 @@ public class KDTreeRendererMaleBrain<T extends RealType<T>,P extends RealLocaliz
 	public static class RKActions extends Actions
 	{
 		public final static String SAYHI = "sayhi";
+
 		public final static String INCREASE = "increase";
 		public final static String DECREASE = "decrease";
+
+		public final static String TUP = "tup";
+		public final static String TDOWN = "tdown";
+
 		public final static String PRINTXFM = "printxfm";
 
 		
 		public static void installActionBindings(
 				final InputActionBindings inputActionBindings,
 				final ViewerPanel viewerPanel,
-				final RadiusChange<DoubleType> rc,
+				final RBFRealRandomAccessible<DoubleType> rc,
 				final KeyStrokeAdder.Factory keyProperties)
 		{
 			final RKActions rka = new RKActions( keyProperties );
 			rka.hi( viewerPanel );
 			rka.increase( rc );
 			rka.decrease( rc );
+			rka.threshUp(rc);
+			rka.threshDown(rc);
 			rka.printTransform( viewerPanel );
 			rka.install( inputActionBindings, "rka" );
 		}
@@ -267,19 +295,34 @@ public class KDTreeRendererMaleBrain<T extends RealType<T>,P extends RealLocaliz
 					SAYHI, "H");
 		}
 
-		public void increase( RadiusChange<DoubleType> rc )
+		public void increase( RBFRealRandomAccessible<DoubleType> rc )
 		{
 			runnableAction( 
 					() -> rc.increase(),
 					INCREASE, "B");
 		}
 
-		public void decrease( RadiusChange<DoubleType> rc )
+		public void decrease( RBFRealRandomAccessible<DoubleType> rc )
 		{
 			runnableAction( 
 					() -> rc.decrease(),
 					DECREASE, "V");
 		}
+		
+		public void threshUp( RBFRealRandomAccessible<DoubleType> rc )
+		{
+			runnableAction( 
+					() -> rc.threshUp(),
+					TUP, "Q");
+		}
+
+		public void threshDown( RBFRealRandomAccessible<DoubleType> rc )
+		{
+			runnableAction( 
+					() -> rc.threshDown(),
+					TDOWN, "W");
+		}
+		
 
 		public void printTransform( final ViewerPanel vp )
 		{
@@ -303,7 +346,7 @@ public class KDTreeRendererMaleBrain<T extends RealType<T>,P extends RealLocaliz
 		final RBFInterpolator.RBFInterpolatorFactory<T> interpFactory;
 		final RBFInterpolator<T> interp;
 		final KDTreeRendererMaleBrain<T,?> kdtr;
-		final double amount;
+		double amount = 50;
 		public RBFRealRandomAccessible( KDTreeRendererMaleBrain<T,?> kdtr, 
 				double startingRad,
 				double amount )
@@ -320,11 +363,31 @@ public class KDTreeRendererMaleBrain<T extends RealType<T>,P extends RealLocaliz
 		public void increase()
 		{
 			interp.increaseRadius(amount);
+			System.out.println( "radius: " + interp.getRadius() );
 		}
 		
 		public void decrease()
 		{
 			interp.decreaseRadius(amount);
+			System.out.println( "radius: " + interp.getRadius() );
+		}
+		
+		public void threshUp()
+		{
+			interp.setThreshold( interp.getThreshold() + 0.02 );
+			System.out.println( "thresh : " + interp.getThreshold() );
+		}
+
+		public void threshDown()
+		{
+			interp.setThreshold( interp.getThreshold() - 0.02 );
+			System.out.println( "thresh : " + interp.getThreshold() );
+		}
+
+		public void setThreshold( double t )
+		{
+			interp.setThreshold( t );
+			System.out.println( "thresh : " + interp.getThreshold() );
 		}
 
 		@Override
@@ -334,12 +397,12 @@ public class KDTreeRendererMaleBrain<T extends RealType<T>,P extends RealLocaliz
 
 		@Override
 		public RealRandomAccess<T> realRandomAccess() {
-			return interp;
+			return interp.copy();
 		}
 
 		@Override
 		public RealRandomAccess<T> realRandomAccess(RealInterval arg0) {
-			return interp;
+			return interp.copy();
 		}
 		
 	}
@@ -423,9 +486,12 @@ public class KDTreeRendererMaleBrain<T extends RealType<T>,P extends RealLocaliz
 			Stream<String> lines = Files.lines(Paths.get(synapseFilePath));
 			lines.forEach( l -> {
 				String[] s = l.split(",");
+
 				RealPoint p = new RealPoint( Double.parseDouble(s[0]), Double.parseDouble(s[1]), Double.parseDouble(s[2]));
 				pts.add( p );
-				vals.add( new DoubleType( 1 ));
+
+				vals.add(new DoubleType(Double.parseDouble(s[3])));
+//				vals.add( new DoubleType( 1 ));
 
 				for( int d = 0; d < 3; d++ )
 				{
