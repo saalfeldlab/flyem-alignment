@@ -9,6 +9,7 @@ import org.janelia.saalfeldlab.n5.N5DatasetDiscoverer;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5TreeNode;
+import org.janelia.saalfeldlab.n5.ij.N5Factory;
 import org.janelia.saalfeldlab.n5.ij.N5Importer;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
 import org.janelia.saalfeldlab.n5.imglib2.RandomAccessibleLoader;
@@ -258,8 +259,8 @@ public class DifferentHemibrainSpaces
 				"resolution", "offset", "unit",
 				"downsamplingFactors");
 
-		N5DatasetDiscoverer disc = new N5DatasetDiscoverer( Collections.singletonList(metaParser), Arrays.asList( N5Importer.GROUP_PARSERS));
-		N5TreeNode node = disc.discoverAndParseRecursive(dataset);
+		N5DatasetDiscoverer disc = new N5DatasetDiscoverer( n5, Collections.singletonList(metaParser), Arrays.asList( N5Importer.GROUP_PARSERS));
+		N5TreeNode node = disc.discoverAndParseRecursive("/");
 		N5Metadata meta = node.getMetadata();
 		MultiscaleMetadata<N5SingleScaleMetadata> ms = (MultiscaleMetadata)meta;
 		
@@ -302,8 +303,13 @@ public class DifferentHemibrainSpaces
 	
 	public static Source< ? > loadHemiN5Pix( final SharedQueue queue ) throws IOException
 	{
+		return loadHemiN5Pix( "/nrs/flyem/data/tmp/Z0115-22.export.n5/22-34", queue );
+	}
+
+	public static Source< ? > loadHemiN5Pix( final String hemiN5Path, final SharedQueue queue ) throws IOException
+	{
 		
-		N5Reader n5hemi = new N5FSReader( "/nrs/flyem/data/tmp/Z0115-22.export.n5/22-34" );
+		N5Reader n5hemi = new N5FSReader( hemiN5Path );
 		//Source<?> sourceRaw = getRandomAccessibleIntervalMipmapSource( n5hemi, "hemibrain" );
 		Source<?> sourceRaw = getRandomAccessibleIntervalMipmapSourceV( n5hemi, "hemibrain", "hemibrain", queue );
 		return sourceRaw;

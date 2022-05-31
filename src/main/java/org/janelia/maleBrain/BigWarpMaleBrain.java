@@ -105,11 +105,12 @@ public class BigWarpMaleBrain implements Callable<Void>
 
 		bw.loadLandmarks(landmarksPath);
 
-		try {
-			bw.loadSettings( settingsPath );
-		} catch (JDOMException e) {
-			e.printStackTrace();
-		}
+		// TODO fix needs
+//		try {
+//			bw.loadSettings( settingsPath );
+//		} catch (JDOMException e) {
+//			e.printStackTrace();
+//		}
 
 		return null;
 	}

@@ -52,6 +52,12 @@ public class Hemi2JRC18F_tweakElastix_opts implements Callable<Void>
 
 	@Option( names = { "-l", "--landmarks" }, required = false, description = "Path to initial landmarks." )
 	private String initLandmarksPath;
+
+	@Option( names = { "-p", "--saalfeld" }, required = false, description = "Path to saalfeld/public" )
+	private String saalfeldPublicPath = "/groups/saalfeld/public";
+
+	@Option( names = { "-h", "--hemibrain" }, required = false, description = "Path to hemibrain" )
+	private String hemibrainPath = "/nrs/flyem/data/tmp/Z0115-22.export.n5/22-34";
 	
 	public static void main( String[] args ) throws Exception
 	{
@@ -61,12 +67,12 @@ public class Hemi2JRC18F_tweakElastix_opts implements Callable<Void>
 	public Void call() throws Exception
 	{
 
-		String templatePath = "/groups/saalfeld/public/flyem_hemiBrainAlign/jrc18/antsA/JRC2018_FEMALE_p8um_iso.nrrd";
-		String hemiPath = "/groups/saalfeld/public/flyem_tbars/tbar_render_20190304_reslice.nrrd";
+		String templatePath = new File( saalfeldPublicPath, "flyem_hemiBrainAlign/jrc18/antsA/JRC2018_FEMALE_p8um_iso.nrrd").getAbsoluteFile().getCanonicalPath();
+		String hemiPath = new File( saalfeldPublicPath, "flyem_tbars/tbar_render_20190304_reslice.nrrd").getAbsoluteFile().getCanonicalPath();
 
 		String[] transformList = new String[]{
-				"/groups/saalfeld/public/flyem_hemiBrainAlign/jrc18_20190304/elastix5InitMask/result/deformationField_inv.nrrd",
-				"/groups/saalfeld/public/flyem_hemiBrainAlign/jrc18_20190304/preproc/totalAffine_regSpace.mat"
+				new File( saalfeldPublicPath, "flyem_hemiBrainAlign/jrc18_20190304/elastix5InitMask/result/deformationField_inv.nrrd").getAbsoluteFile().getCanonicalPath() ,
+				new File( saalfeldPublicPath, "flyem_hemiBrainAlign/jrc18_20190304/preproc/totalAffine_regSpace.mat").getAbsoluteFile().getCanonicalPath()
 		};
 		
 		InvertibleRealTransformSequence totalXfm = new InvertibleRealTransformSequence();
@@ -130,9 +136,9 @@ public class Hemi2JRC18F_tweakElastix_opts implements Callable<Void>
 				movingNames, 
 				targetNames );
 		
-////		// add hemi data
+		// add hemi data
 		final SharedQueue queue = new SharedQueue( 8 );
-		Source< ? > hemiPix = DifferentHemibrainSpaces.loadHemiN5Pix( queue );
+		Source< ? > hemiPix = DifferentHemibrainSpaces.loadHemiN5Pix( hemibrainPath, queue );
 		AffineTransform3D n5ToRegSpace = DifferentHemibrainSpaces.n5ToRenderSpaceMicronsReal();
 
 
