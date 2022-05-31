@@ -12,6 +12,7 @@ import bdv.export.ProgressWriter;
 import bdv.gui.BigWarpViewerOptions;
 import fiji.util.gui.GenericDialogPlus;
 import mpicbg.spim.data.SpimDataException;
+import net.imglib2.realtransform.RealTransform;
 
 public class BigWarpSwc< T > extends BigWarp<T>
 {
@@ -66,18 +67,30 @@ public class BigWarpSwc< T > extends BigWarp<T>
 		loadSwc( swcPath );
 	}
 	
-	public void loadSwc( final String swcPath )
+	public void loadSwc( final String swcPath, final boolean moving, final RealTransform transform )
 	{
 		System.out.println( swcPath );
 
 		Swc swc = Swc.read( new File( swcPath ) );
+		
+
 		if( swc != null )
 		{
-			swcOverlayMoving.set( swc );
-			swcOverlayMoving.setVisible( true );
+			
+			if( transform != null )
+			{
+				
+			}
+			
+			if( moving ) {
+				swcOverlayMoving.set( swc );
+				swcOverlayMoving.setVisible( true );
+			}
+			else {
+				swcOverlayTarget.set( swc );
+				swcOverlayTarget.setVisible( true );
+			}
 
-			swcOverlayTarget.set( swc );
-			swcOverlayTarget.setVisible( true );
 		}
 		else
 		{
@@ -86,6 +99,22 @@ public class BigWarpSwc< T > extends BigWarp<T>
 		
 	}
 	
+	public static Swc transform( final Swc swc, final RealTransform transform )
+	{
+		// TODO
+		return null;
+	}
+	
+	public void loadSwc( final String swcPath, final boolean moving )
+	{
+		loadSwc( swcPath, moving, null );
+	}
+
+	public void loadSwc( final String swcPath )
+	{
+		loadSwc( swcPath, true, null );
+	}
+
 	public void setSwcVisParams()
 	{
 		final GenericDialogPlus gd = new GenericDialogPlus( "swc overlay options" );

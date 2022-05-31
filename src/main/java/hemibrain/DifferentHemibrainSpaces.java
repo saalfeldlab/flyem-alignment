@@ -18,6 +18,7 @@ import org.janelia.saalfeldlab.n5.metadata.N5GenericSingleScaleMetadataParser;
 import org.janelia.saalfeldlab.n5.metadata.N5Metadata;
 import org.janelia.saalfeldlab.n5.metadata.N5SingleScaleMetadata;
 
+import bdv.img.RenamableSource;
 import bdv.tools.transformation.TransformedSource;
 import bdv.util.BdvFunctions;
 import bdv.util.BdvOptions;
@@ -103,22 +104,22 @@ public class DifferentHemibrainSpaces
 //		BdvStackSource< ? > bdv = BdvFunctions.show( affineSource( hemiPix, xfm ) );
 
 
-		// show hemibrain to dvid physical
-		AffineTransform3D xfm = n5ToDvid();
-		xfm.preConcatenate( emPixelsToMicrons() );
-		// here we're in dvid micron space
-		xfm.preConcatenate( emPixelsToMicrons().inverse() );
-		xfm.preConcatenate( n5ToDvid().inverse() );
-		xfm.preConcatenate( n5ToRenderSpaceMicronsReal());
-		System.out.println( xfm );
-		BdvStackSource< ? > bdv = BdvFunctions.show( affineSource( hemiPix, xfm ) );
-
-		AffineTransform3D dvidToRenderSpace = new AffineTransform3D();
-		dvidToRenderSpace.preConcatenate( emPixelsToMicrons().inverse() );
-		dvidToRenderSpace.preConcatenate( n5ToDvid().inverse() );
-		dvidToRenderSpace.preConcatenate( n5ToRenderSpaceMicronsReal());
-		System.out.println( "dvidToRenderSpace:" );
-		System.out.println( dvidToRenderSpace );
+//		// show hemibrain to dvid physical
+//		AffineTransform3D xfm = n5ToDvid();
+//		xfm.preConcatenate( emPixelsToMicrons() );
+//		// here we're in dvid micron space
+//		xfm.preConcatenate( emPixelsToMicrons().inverse() );
+//		xfm.preConcatenate( n5ToDvid().inverse() );
+//		xfm.preConcatenate( n5ToRenderSpaceMicronsReal());
+//		System.out.println( xfm );
+//		BdvStackSource< ? > bdv = BdvFunctions.show( affineSource( hemiPix, xfm ) );
+//
+//		AffineTransform3D dvidToRenderSpace = new AffineTransform3D();
+//		dvidToRenderSpace.preConcatenate( emPixelsToMicrons().inverse() );
+//		dvidToRenderSpace.preConcatenate( n5ToDvid().inverse() );
+//		dvidToRenderSpace.preConcatenate( n5ToRenderSpaceMicronsReal());
+//		System.out.println( "dvidToRenderSpace:" );
+//		System.out.println( dvidToRenderSpace );
 		
 		
 		// hemibrain to dvd and to (weird) render space
@@ -153,16 +154,16 @@ public class DifferentHemibrainSpaces
 //		BdvStackSource< ? > bdv = BdvFunctions.show( affineSource( hemiPix, xfm ));
 		
 
-//		String hemiPath = "/groups/saalfeld/public/flyem_hemiBrainAlign/jrc18/antsA/tbar_render_resliceReverse_hdr_d4.nrrd";
-		//String hemiPath = "/groups/saalfeld/public/flyem_tbars/tbar_render_20190304_reslice.nrrd";
-		String hemiPath = "/groups/saalfeld/public/flyem_tbars/tbar_render_20190304.nrrd";
-
-
-		System.out.println("loadding nrrd: " + hemiPath );
-		RealImgAndInterval< FloatType > hemi = loadNrrd( hemiPath, null );
-		System.out.println("done");
-		
-		BdvFunctions.show( hemi.get(), "hemi synapses", BdvOptions.options().addTo( bdv ));
+////		String hemiPath = "/groups/saalfeld/public/flyem_hemiBrainAlign/jrc18/antsA/tbar_render_resliceReverse_hdr_d4.nrrd";
+//		//String hemiPath = "/groups/saalfeld/public/flyem_tbars/tbar_render_20190304_reslice.nrrd";
+//		String hemiPath = "/groups/saalfeld/public/flyem_tbars/tbar_render_20190304.nrrd";
+//
+//
+//		System.out.println("loadding nrrd: " + hemiPath );
+//		RealImgAndInterval< FloatType > hemi = loadNrrd( hemiPath, null );
+//		System.out.println("done");
+//		
+//		BdvFunctions.show( hemi.get(), "hemi synapses", BdvOptions.options().addTo( bdv ));
 
 
 //		xfm.apply( n5PixPt, resultPt );
@@ -208,6 +209,17 @@ public class DifferentHemibrainSpaces
 //		AffineTransform3D viewerTransform = new AffineTransform3D();
 //		viewerTransform.set( xfmparams );
 //		bdv.getBdvHandle().getViewerPanel().setCurrentViewerTransform( viewerTransform );
+		
+		
+		AffineTransform3D n5ToRegSpace = DifferentHemibrainSpaces.n5ToRenderSpaceMicronsReal();
+
+
+		Source hemiEmSrc = new RenamableSource(
+				affineSource( hemiPix, n5ToRegSpace ),
+				"hemibrain EM" );
+		
+	
+		BdvStackSource bdv = BdvFunctions.show( hemiEmSrc );
 	}
 	
 	protected static final String scalesKey = "scales";
@@ -251,8 +263,15 @@ public class DifferentHemibrainSpaces
 		return String.format( "s%d", scale );
 	} 
 
+
 	public static Source<?> getRandomAccessibleIntervalMipmapSourceV(
 			final N5Reader n5, final String dataset, final String name, final SharedQueue queue ) throws IOException
+	{
+		return getRandomAccessibleIntervalMipmapSourceV( n5, dataset, name, queue, true );
+	}
+
+	public static Source<?> getRandomAccessibleIntervalMipmapSourceV(
+			final N5Reader n5, final String dataset, final String name, final SharedQueue queue, boolean relativeScales ) throws IOException
 	{
 		N5GenericSingleScaleMetadataParser metaParser = new N5GenericSingleScaleMetadataParser(
 				"min", "max",
@@ -278,7 +297,9 @@ public class DifferentHemibrainSpaces
 		for ( N5SingleScaleMetadata scaleMeta : ms.getChildrenMetadata() )
 		{
 			N5Utils.openVolatile( n5, scaleMeta.getPath() );
-			scales[i] = scaleMeta.getPixelResolution();
+//			scales[i] = scaleMeta.getPixelResolution();
+			scales[i] = scaleMeta.getDownsamplingFactors();
+			System.out.println( String.format( "s%d", i ) + " " + Arrays.toString(scales[i]));
 			i++;
 		}
 

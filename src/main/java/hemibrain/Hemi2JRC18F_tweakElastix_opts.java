@@ -7,8 +7,6 @@ import java.util.concurrent.Callable;
 
 import bdv.export.ProgressWriterConsole;
 import bdv.img.RenamableSource;
-import bdv.util.BdvFunctions;
-import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Source;
@@ -19,6 +17,7 @@ import ij.ImagePlus;
 import net.imglib2.FinalInterval;
 import net.imglib2.Interval;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.RealImgAndInterval;
 import net.imglib2.RealRandomAccessible;
 import net.imglib2.img.Img;
 import net.imglib2.img.display.imagej.ImageJFunctions;
@@ -67,6 +66,7 @@ public class Hemi2JRC18F_tweakElastix_opts implements Callable<Void>
 	public Void call() throws Exception
 	{
 
+		System.out.println( saalfeldPublicPath );
 		String templatePath = new File( saalfeldPublicPath, "flyem_hemiBrainAlign/jrc18/antsA/JRC2018_FEMALE_p8um_iso.nrrd").getAbsoluteFile().getCanonicalPath();
 		String hemiPath = new File( saalfeldPublicPath, "flyem_tbars/tbar_render_20190304_reslice.nrrd").getAbsoluteFile().getCanonicalPath();
 
@@ -315,23 +315,4 @@ public class Hemi2JRC18F_tweakElastix_opts implements Callable<Void>
 		return new RealImgAndInterval<FloatType>( interval, rra );
 	}
 	
-	public static class RealImgAndInterval<T>
-	{
-		public final Interval itvl;
-		public final RealRandomAccessible<T> rra;
-		
-		public RealImgAndInterval(
-			final Interval itvl,
-			final RealRandomAccessible<T> rra )
-		{
-			this.rra = rra;
-			this.itvl = itvl;
-		}
-		
-		public RandomAccessibleInterval<T> get()
-		{
-			return Views.interval( Views.raster( rra ), itvl );
-		}
-	}
-
 }
