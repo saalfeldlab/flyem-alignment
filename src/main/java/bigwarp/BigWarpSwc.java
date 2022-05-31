@@ -1,12 +1,15 @@
 package bigwarp;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.ActionMap;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 
 import org.janelia.saalfeldlab.swc.Swc;
+import org.janelia.saalfeldlab.swc.SwcPoint;
 
 import bdv.export.ProgressWriter;
 import bdv.gui.BigWarpViewerOptions;
@@ -79,9 +82,9 @@ public class BigWarpSwc< T > extends BigWarp<T>
 			
 			if( transform != null )
 			{
-				
+				swc = transform( swc, transform );
 			}
-			
+
 			if( moving ) {
 				swcOverlayMoving.set( swc );
 				swcOverlayMoving.setVisible( true );
@@ -101,8 +104,21 @@ public class BigWarpSwc< T > extends BigWarp<T>
 	
 	public static Swc transform( final Swc swc, final RealTransform transform )
 	{
-		// TODO
-		return null;
+		List<SwcPoint> transformedPoints = new ArrayList<>();
+		double[] src = new double[3];
+		double[] res = new double[3];
+		for( SwcPoint p : swc.getPoints())
+		{
+			src[0] = p.x;
+			src[1] = p.y;
+			src[2] = p.z;
+
+			transform.apply( src, res );
+			transformedPoints.add( new SwcPoint( p.id, p.type, 
+					res[0], res[1], res[2],
+					p.radius, p.previous ));
+		}
+		return new Swc( transformedPoints );
 	}
 	
 	public void loadSwc( final String swcPath, final boolean moving )
