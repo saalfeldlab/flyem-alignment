@@ -68,6 +68,9 @@ public class BigwarpSwcOverlay extends BigWarpGenericOverlay<Swc>
 
 	public void paint( final Graphics2D g )
 	{
+		if( obj == null )
+			return;
+
 		g.setColor( color );
 		g.setStroke( BigWarpViewerSettings.NORMAL_STROKE );
 

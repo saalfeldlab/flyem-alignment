@@ -24,6 +24,8 @@ public class BigWarpSwc< T > extends BigWarp<T>
 
 	protected final BigwarpSwcOverlay swcOverlayTarget;
 
+	protected RealTransform swcTransform;
+
 	public BigWarpSwc( bigwarp.BigWarp.BigWarpData< T > data, String windowTitle, BigWarpViewerOptions options, ProgressWriter progressWriter ) throws SpimDataException
 	{
 		super( data, windowTitle, options, progressWriter );
@@ -56,6 +58,11 @@ public class BigWarpSwc< T > extends BigWarp<T>
 		this( data, windowTitle, BigWarpViewerOptions.options( ( detectNumDims( data.sources ) == 2 ) ), progressWriter );
 	}
 	
+	public void setSwctransform( final RealTransform transform )
+	{
+		this.swcTransform = transform;
+	}
+
 	public void loadSwcDialog()
 	{
 		final GenericDialogPlus gd = new GenericDialogPlus( "Import swc" );
@@ -67,25 +74,22 @@ public class BigWarpSwc< T > extends BigWarp<T>
 			return;
 
 		String swcPath = gd.getNextString();
-		loadSwc( swcPath );
+		loadSwc( swcPath, false, swcTransform );
 	}
 	
 	public void loadSwc( final String swcPath, final boolean moving, final RealTransform transform )
 	{
 		System.out.println( swcPath );
-
 		Swc swc = Swc.read( new File( swcPath ) );
-		
-
 		if( swc != null )
 		{
-			
 			if( transform != null )
 			{
 				swc = transform( swc, transform );
 			}
 
-			if( moving ) {
+			if( moving )
+			{
 				swcOverlayMoving.set( swc );
 				swcOverlayMoving.setVisible( true );
 			}
@@ -93,7 +97,6 @@ public class BigWarpSwc< T > extends BigWarp<T>
 				swcOverlayTarget.set( swc );
 				swcOverlayTarget.setVisible( true );
 			}
-
 		}
 		else
 		{

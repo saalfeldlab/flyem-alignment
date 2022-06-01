@@ -25,6 +25,8 @@ import net.imglib2.interpolation.randomaccess.NLinearInterpolatorFactory;
 import net.imglib2.realtransform.AffineTransform3D;
 import net.imglib2.realtransform.InvertibleRealTransform;
 import net.imglib2.realtransform.InvertibleRealTransformSequence;
+import net.imglib2.realtransform.RealTransform;
+import net.imglib2.realtransform.RealTransformSequence;
 import net.imglib2.realtransform.RealViews;
 import net.imglib2.type.NativeType;
 import net.imglib2.type.numeric.RealType;
@@ -149,7 +151,18 @@ public class Hemi2JRC18F_tweakElastix_opts implements Callable<Void>
 
 		//BigWarpInit.createBigWarpData( movingRaiList, targetRaiList )
 		BigWarpSwc bw = new BigWarpSwc( data, "bigwarp", new ProgressWriterConsole());
-		
+
+		final RealTransformSequence swcTransform = new RealTransformSequence();
+
+		AffineTransform3D affine = DifferentHemibrainSpaces.n5ToDvid().inverse();
+		affine.preConcatenate(n5ToRegSpace);
+
+		swcTransform.add(affine);
+		swcTransform.add(totalXfm);
+
+		bw.setSwctransform(swcTransform);
+
+
 		if( skeletonPath != null && !skeletonPath.isEmpty())
 		{
 			bw.loadSwc( skeletonPath );
