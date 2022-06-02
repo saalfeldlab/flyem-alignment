@@ -152,14 +152,19 @@ public class Hemi2JRC18F_tweakElastix_opts implements Callable<Void>
 		//BigWarpInit.createBigWarpData( movingRaiList, targetRaiList )
 		BigWarpSwc bw = new BigWarpSwc( data, "bigwarp", new ProgressWriterConsole());
 
-		final RealTransformSequence swcTransform = new RealTransformSequence();
+		//final RealTransformSequence swcTransform = new RealTransformSequence();
 
-		AffineTransform3D affine = DifferentHemibrainSpaces.n5ToDvid().inverse();
-		affine.preConcatenate(n5ToRegSpace);
+		//AffineTransform3D affine = DifferentHemibrainSpaces.n5ToDvid().inverse();
+		//affine.preConcatenate(n5ToRegSpace);
 
-		swcTransform.add(affine);
-		swcTransform.add(totalXfm);
-
+		//swcTransform.add(affine);
+		//swcTransform.add(totalXfm);
+		//bw.setSwctransform(swcTransform);
+        
+        
+        System.out.println( "setting swc transform to reg space" );
+		AffineTransform3D swcTransform = DifferentHemibrainSpaces.n5ToDvid().inverse();
+		swcTransform.preConcatenate(n5ToRegSpace);
 		bw.setSwctransform(swcTransform);
 
 

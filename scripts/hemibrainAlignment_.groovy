@@ -60,7 +60,7 @@ if( movingPaths != null)
 //			RealImgAndInterval< FloatType > thisMoving = loadNrrd( moving, null, new long[]{ 40, 40 ,40 } );
 //			movingRaiList.add( thisMoving.get() );
 
-		System.out.println("MOVING: loading from: " + moving );
+		println("MOVING: loading from: " + moving );
 		RealImgAndInterval thisMoving = loadNrrd( moving, totalXfm, new long[]{ 40, 40 ,40 } );
 		movingRaiList.add( thisMoving.get() );
 		movingNames.add( (new File( moving)).getName() );
@@ -110,6 +110,11 @@ BigWarpInit.add( data, hemiEmSrc, 2, 1, false );
 //BigWarpInit.createBigWarpData( movingRaiList, targetRaiList )
 BigWarpSwc bw = new BigWarpSwc( data, "bigwarp", new ProgressWriterConsole());
 
+println( "setting swc transform to reg space" );
+swcTransform = DifferentHemibrainSpaces.n5ToDvid().inverse();
+swcTransform.preConcatenate(n5ToRegSpace);
+bw.setSwctransform(swcTransform);
+
 if( skeletonPath != null && !skeletonPath.isEmpty())
 {
 	bw.loadSwc( skeletonPath );
@@ -154,7 +159,7 @@ def BigWarpData createBigWarpData(
 
 def loadImagePlus( ImagePlus ip, InvertibleRealTransform xfm, long[] pad )
 {
-	System.out.println("result: " + ip);
+	println("result: " + ip);
 	
 	double rx = ip.getCalibration().pixelWidth;
 	double ry = ip.getCalibration().pixelHeight;
