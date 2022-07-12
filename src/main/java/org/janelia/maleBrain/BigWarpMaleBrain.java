@@ -2,74 +2,76 @@ package org.janelia.maleBrain;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.Callable;
 
 import org.janelia.render.KDTreeRendererRaw;
 import org.janelia.saalfeldlab.n5.N5FSReader;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.imglib2.N5Utils;
-import org.janelia.saalfeldlab.transform.io.TransformReader;
-import org.jdom2.JDOMException;
 
 import bdv.export.ProgressWriterConsole;
-import bdv.ij.util.ProgressWriterIJ;
+import bdv.gui.BigWarpViewerOptions;
 import bdv.tools.transformation.TransformedSource;
-import bdv.util.BdvFunctions;
-import bdv.util.BdvOptions;
-import bdv.util.BdvStackSource;
 import bdv.util.RandomAccessibleIntervalMipmapSource;
 import bdv.util.RandomAccessibleIntervalSource;
 import bdv.util.volatiles.SharedQueue;
 import bdv.viewer.Source;
 import bigwarp.BigWarpInit;
+import bigwarp.BigWarpSwc;
+import ij.IJ;
 import ij.ImageJ;
+import ij.ImagePlus;
 import bigwarp.BigWarp;
 import bigwarp.BigWarp.BigWarpData;
 import io.IOHelper;
 import mpicbg.spim.data.SpimDataException;
 import mpicbg.spim.data.sequence.FinalVoxelDimensions;
 import mpicbg.spim.data.sequence.VoxelDimensions;
-import net.imglib2.FinalInterval;
 import net.imglib2.RandomAccessibleInterval;
-import net.imglib2.RealPoint;
-import net.imglib2.RealRandomAccessible;
-import net.imglib2.parallel.SequentialExecutorService;
+import net.imglib2.img.Img;
+import net.imglib2.img.display.imagej.ImageJFunctions;
 import net.imglib2.realtransform.AffineTransform3D;
-import net.imglib2.realtransform.InverseRealTransform;
-import net.imglib2.realtransform.InvertibleRealTransform;
-import net.imglib2.realtransform.RealTransformRandomAccessible;
 import net.imglib2.realtransform.RealTransformSequence;
-import net.imglib2.realtransform.RealViews;
 import net.imglib2.realtransform.Scale3D;
 import net.imglib2.type.NativeType;
+import net.imglib2.type.numeric.ARGBType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.integer.UnsignedByteType;
-import net.imglib2.util.Intervals;
 import net.imglib2.util.Util;
-import net.imglib2.view.IntervalView;
-import net.imglib2.view.Views;
-import process.RenderTransformed;
+import picocli.CommandLine.Option;
 
 public class BigWarpMaleBrain implements Callable<Void>
 {
 	
-	final String emRawN5 = "/nrs/flyem/render/n5/Z0720_07m_BR";
-	final String emRawDataset = "/40-06-final";
+	@Option( names = { "-e", "--em-raw" }, required = false)
+	String emRawN5 = "/nrs/flyem/render/n5/Z0720_07m_BR";
 
-	final String emClaheN5 = "/nrs/flyem/render/n5/Z0720_07m_BR/40-06-dvid-coords-clahe-from-jpeg.n5";
-	final String emClaheDataset = "/grayscale";
+	String emRawDataset = "/40-06-final";
 
+	@Option( names = { "-e", "--em" }, required = true, description = "EM N5 root path" )
+	String emClaheN5 = "/nrs/flyem/render/n5/Z0720_07m_BR/40-06-dvid-coords-clahe-from-jpeg.n5";
+
+	@Option( names = { "-d", "--em-dataset" }, required = true, description = "EM N5 dataset" )
+	String emClaheDataset = "/grayscale";
+
+	@Option( names = { "-t", "--template" }, required = true, description = "Path to JRC2018M file" )
 	String templatePath = "/groups/saalfeld/public/jrc2018/JRC2018_MALE_40x.nrrd";
+
+	@Option( names = { "-s", "--synapses" }, required = true, description = "Path to synapse cloud file" )
 	String synapsesPath = "/nrs/saalfeld/john/flyem_maleBrain/tbars/render_tbars_512nm.nrrd";
 
+	String roisPath = "/nrs/saalfeld/john/flyem_maleBrain/lopRoi_ed_xfm_RGB.tif";
 
 	String templateClaheSpacePath = "/nrs/saalfeld/john/flyem_maleBrain/regexps/exp0029_t9_0029.sh_20220330165846/result_0029/JRC2018M_xfm_v2.nrrd";
 
-	String landmarksPath = "/nrs/saalfeld/john/flyem_maleBrain/finetune/landmarks.csv";
-	String settingsPath = "/nrs/saalfeld/john/flyem_maleBrain/finetune/bigwarp.settings.xml";
+	@Option( names = { "-l", "--landmarks" }, required = true, description = "Path to landmarks (csv)" )
+	String landmarksPath = "/nrs/saalfeld/john/flyem_maleBrain/finetune2/landmarks.csv";
+//	String landmarksPath = "/nrs/saalfeld/john/flyem_maleBrain/finetune/landmarks.csv";
+
+	@Option( names = { "--settings" }, required = true, description = "Path to landmarks (csv)" )
+	String settingsPath;
+
+	String defaultsettingsPath = "/nrs/saalfeld/john/flyem_maleBrain/finetune/bigwarp.settings.xml";
 
 	public BigWarpMaleBrain() { }
 
@@ -81,7 +83,6 @@ public class BigWarpMaleBrain implements Callable<Void>
 
 	public Void call() throws IOException, SpimDataException
 	{
-		
 		final SharedQueue queue = new SharedQueue( 24 );
 		final Source emSrc = loadImages(
 				emClaheN5, emClaheDataset,
@@ -89,6 +90,8 @@ public class BigWarpMaleBrain implements Callable<Void>
 				true, queue );
 
 		final Source jrc18Src = loadImgAsSource( templateClaheSpacePath, true );
+		final Source roisSrc = loadImgAsSourceRGB( roisPath, true );
+
 		final Source tbarSrc  = loadImgAsSource( synapsesPath, true );
 		
 
@@ -96,20 +99,24 @@ public class BigWarpMaleBrain implements Callable<Void>
 
 		int id = 0;
 		BigWarpInit.add( bigwarpdata, jrc18Src, id++, 0, true );
+		BigWarpInit.add( bigwarpdata, roisSrc, id++, 0, true );
+
 		BigWarpInit.add( bigwarpdata, tbarSrc, id++, 0, false );
 		BigWarpInit.add( bigwarpdata, emSrc, id++, 0, false );
 		bigwarpdata.wrapUp();
 		
 		ImageJ ij = new ImageJ();
-		final BigWarp bw = new BigWarp( bigwarpdata, "Big Warp",  new ProgressWriterConsole());
+		BigWarpViewerOptions bwopts = BigWarpViewerOptions.options();
+		bwopts.numRenderingThreads(48);
+		final BigWarpSwc bw = new BigWarpSwc( bigwarpdata, "Big Warp", bwopts, new ProgressWriterConsole());
 
 		bw.loadLandmarks(landmarksPath);
 
-		try {
-			bw.loadSettings( settingsPath );
-		} catch (JDOMException e) {
-			e.printStackTrace();
-		}
+//		try {
+//			bw.loadSettings( settingsPath );
+//		} catch (JDOMException e) {
+//			e.printStackTrace();
+//		}
 
 		return null;
 	}
@@ -147,6 +154,29 @@ public class BigWarpMaleBrain implements Callable<Void>
 		T type = Util.getTypeFromInterval(img);
 
 		final Scale3D res = new Scale3D(io.getResolution());
+		if( toNm )
+			res.preConcatenate( umToNm() );
+
+		AffineTransform3D xfm = new AffineTransform3D();
+		xfm.preConcatenate(res);
+
+		final RandomAccessibleIntervalSource src = new RandomAccessibleIntervalSource<>(img, type, xfm, new File(imagePath).getName());
+		return src;
+	}
+	
+	public Source<ARGBType> loadImgAsSourceRGB(
+			String imagePath,
+			boolean toNm) {
+
+		final ImagePlus imp = IJ.openImage(imagePath);
+		final Img<ARGBType> img = ImageJFunctions.wrapRGBA(imp);
+		final ARGBType type = new ARGBType();
+
+		final Scale3D res = new Scale3D( 
+			imp.getCalibration().pixelWidth,
+			imp.getCalibration().pixelHeight,
+			imp.getCalibration().pixelDepth);
+
 		if( toNm )
 			res.preConcatenate( umToNm() );
 
